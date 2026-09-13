@@ -3,6 +3,7 @@ import { ProjectDocument, ProcessingStatus } from '../types';
 import { DocumentProcessingService } from '../services/documentProcessingService';
 import { DocumentViewer } from '../components/documents/DocumentViewer';
 import { REAL_TEST_DATA_DOCUMENTS, LibraryDocumentItem } from '../services/documentLibraryData';
+import { DocumentClassificationService } from '../services/documentClassificationService';
 import {
   FileText,
   Upload,
@@ -39,6 +40,8 @@ export type LibraryCategory =
   | 'Legal & Tax'
   | 'Other';
 
+export type UploadCategorySelection = 'AUTO' | LibraryCategory;
+
 const STORAGE_KEY = 'acnabin_document_library_docs';
 
 export const DocumentLibraryPage: React.FC = () => {
@@ -59,7 +62,7 @@ export const DocumentLibraryPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDoc, setSelectedDoc] = useState<ProjectDocument | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadCategory, setUploadCategory] = useState<LibraryCategory>('Company Profile');
+  const [uploadCategory, setUploadCategory] = useState<UploadCategorySelection>('AUTO');
   const [viewMode, setViewMode] = useState<'grid' | 'table' | 'folder'>('grid');
   const [selectedFolder, setSelectedFolder] = useState<string>('ALL');
 
@@ -76,17 +79,24 @@ export const DocumentLibraryPage: React.FC = () => {
 
   const categories: { id: LibraryCategory; label: string; icon: any }[] = [
     { id: 'ALL', label: 'All Documents', icon: FolderOpen },
+    { id: 'CVs', label: 'CVs & Key Experts', icon: Users },
     { id: 'Company Profile', label: 'Company Profile', icon: Building2 },
     { id: 'Previous Proposals', label: 'Previous Proposals', icon: FileText },
     { id: 'Certificates & Credentials', label: 'Certificates & Credentials', icon: ShieldCheck },
     { id: 'Company Experience', label: 'Experience & Work Orders', icon: Award },
     { id: 'Legal & Tax', label: 'Legal & Tax Documents', icon: FileCode },
-    { id: 'CVs', label: 'CVs & Key Experts', icon: Users },
     { id: 'Other', label: 'TORs & Other', icon: Filter }
   ];
 
   // Distinct folders
   const folders = Array.from(new Set(documents.map((d) => d.folderName || 'General'))).sort();
+
+  const handleUpdateDocCategory = (docId: string, newCat: LibraryCategory, e?: React.SyntheticEvent) => {
+    if (e) e.stopPropagation();
+    setDocuments((prev) =>
+      prev.map((d) => (d.id === docId ? { ...d, kbCategory: newCat } : d))
+    );
+  };
 
   const filteredDocs = documents.filter((doc) => {
     const matchesCategory = selectedCategory === 'ALL' || doc.kbCategory === selectedCategory;
@@ -130,6 +140,28 @@ export const DocumentLibraryPage: React.FC = () => {
         ocrReq = res.document.ocrRequired;
       }
 
+      // Smart classification to accurately separate CVs from Company Profile and others
+      const classification = DocumentClassificationService.classify(file.name, mdContent);
+      const determinedCategory: LibraryCategory =
+        uploadCategory === 'AUTO' || uploadCategory === 'ALL'
+          ? classification.category
+          : uploadCategory;
+
+      const folderName =
+        determinedCategory === 'CVs'
+          ? 'CVs & Key Experts'
+          : determinedCategory === 'Company Profile'
+          ? 'Detailed Organizational Profile'
+          : determinedCategory === 'Company Experience'
+          ? 'Similar Experience With Fees'
+          : determinedCategory === 'Certificates & Credentials'
+          ? 'Certificates & Credentials'
+          : determinedCategory === 'Legal & Tax'
+          ? 'Trade License, TIN and BIN'
+          : determinedCategory === 'Previous Proposals'
+          ? 'Sample_Proposals'
+          : 'TOR & RFP Documents';
+
       const newDoc: LibraryDocumentItem = {
         id: `kb-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
         fileName: file.name,
@@ -143,13 +175,13 @@ export const DocumentLibraryPage: React.FC = () => {
         isSearchable: true,
         pageCount: Math.max(1, Math.ceil(mdContent.split('\n\n').length / 3)),
         sourcePath: URL.createObjectURL(file),
-        sourceFileRelativePath: `test_data/Uploads/${file.name}`,
-        folderName: 'User Uploads',
-        aiConfidence: score,
+        sourceFileRelativePath: `test_data/${folderName}/${file.name}`,
+        folderName: folderName,
+        aiConfidence: Math.max(score, classification.confidence),
         version: '1.0',
-        kbCategory: uploadCategory === 'ALL' ? 'Company Profile' : uploadCategory,
-        tags: ['User Upload', uploadCategory, ext],
-        description: `Uploaded document for proposal knowledge base and evidence verification.`,
+        kbCategory: determinedCategory,
+        tags: Array.from(new Set([...classification.detectedTags, determinedCategory, ext])),
+        description: classification.reason || `Uploaded document for proposal knowledge base.`,
         markdownContent: mdContent
       };
 
@@ -197,7 +229,7 @@ export const DocumentLibraryPage: React.FC = () => {
               </span>
             </div>
             <p className="text-xs text-slate-600">
-              Institutional evidence repository: statutory licenses, past winning technical proposals, experience letters, bank solvency, and TOR benchmarks from <code className="px-1.5 py-0.5 bg-slate-100 text-slate-800 rounded font-mono font-bold text-[11px]">/test_data/</code>.
+              Institutional evidence repository: statutory licenses, past winning technical proposals, expert CVs, experience letters, and TOR benchmarks from <code className="px-1.5 py-0.5 bg-slate-100 text-slate-800 rounded font-mono font-bold text-[11px]">/test_data/</code>.
             </p>
           </div>
 
@@ -213,16 +245,17 @@ export const DocumentLibraryPage: React.FC = () => {
 
             <select
               value={uploadCategory}
-              onChange={(e) => setUploadCategory(e.target.value as LibraryCategory)}
+              onChange={(e) => setUploadCategory(e.target.value as UploadCategorySelection)}
               className="px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded text-xs font-bold text-slate-800 focus:border-[#1D8C8C] focus:outline-none"
             >
+              <option value="AUTO">✨ Auto-Detect (Smart AI / Keyword)</option>
+              <option value="CVs">Category: CVs & Key Experts</option>
               <option value="Company Profile">Category: Company Profile</option>
               <option value="Previous Proposals">Category: Previous Proposals</option>
               <option value="Certificates & Credentials">Category: Certificates</option>
               <option value="Company Experience">Category: Experience</option>
               <option value="Legal & Tax">Category: Legal & Tax</option>
-              <option value="CVs">Category: CVs</option>
-              <option value="Other">Category: Other</option>
+              <option value="Other">Category: Other / TOR</option>
             </select>
 
             <button
@@ -442,9 +475,21 @@ export const DocumentLibraryPage: React.FC = () => {
                         <span>{doc.fileType}</span>
                       </span>
 
-                      <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded truncate max-w-[140px]">
-                        {doc.kbCategory}
-                      </span>
+                      <select
+                        value={doc.kbCategory}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => handleUpdateDocCategory(doc.id, e.target.value as LibraryCategory, e)}
+                        className="text-[11px] font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 px-1.5 py-0.5 rounded border border-slate-200 focus:outline-none focus:border-[#1D8C8C] cursor-pointer"
+                        title="Click to change document category"
+                      >
+                        <option value="CVs">CVs & Key Experts</option>
+                        <option value="Company Profile">Company Profile</option>
+                        <option value="Previous Proposals">Previous Proposals</option>
+                        <option value="Certificates & Credentials">Certificates</option>
+                        <option value="Company Experience">Experience</option>
+                        <option value="Legal & Tax">Legal & Tax</option>
+                        <option value="Other">Other / TOR</option>
+                      </select>
                     </div>
 
                     {/* File Title */}
@@ -551,7 +596,20 @@ export const DocumentLibraryPage: React.FC = () => {
                         </div>
                       </td>
                       <td className="font-mono text-[11px] font-bold text-slate-800 whitespace-nowrap">
-                        {doc.kbCategory}
+                        <select
+                          value={doc.kbCategory}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => handleUpdateDocCategory(doc.id, e.target.value as LibraryCategory, e)}
+                          className="text-[11px] font-semibold text-slate-800 bg-slate-50 hover:bg-slate-100 px-2 py-1 rounded border border-slate-200 focus:outline-none focus:border-[#1D8C8C] cursor-pointer"
+                        >
+                          <option value="CVs">CVs & Key Experts</option>
+                          <option value="Company Profile">Company Profile</option>
+                          <option value="Previous Proposals">Previous Proposals</option>
+                          <option value="Certificates & Credentials">Certificates</option>
+                          <option value="Company Experience">Experience</option>
+                          <option value="Legal & Tax">Legal & Tax</option>
+                          <option value="Other">Other / TOR</option>
+                        </select>
                       </td>
                       <td className="font-mono text-[10px] text-slate-600 whitespace-nowrap">
                         <span className="px-1.5 py-0.5 bg-slate-100 rounded text-slate-700 font-semibold">

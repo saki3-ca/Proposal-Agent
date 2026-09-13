@@ -103,18 +103,33 @@ export class EvidenceMatchingService {
     }
 
     // 1. ELIGIBILITY & LEGAL CREDENTIALS
-    if (catLower === 'eligibility' || catLower === 'submission' || textLower.includes('icab') || textLower.includes('tax') || textLower.includes('vat') || textLower.includes('trade license')) {
+    if (catLower === 'eligibility' || catLower === 'submission' || textLower.includes('tax clearance') || textLower.includes('vat bin') || textLower.includes('trade license')) {
       return this.verifyEligibilityRequirement(req, indexRecords);
     }
 
-    // 2. FIRM EXPERIENCE REQUIREMENTS
-    if (catLower === 'experience' || textLower.includes('similar assignment') || textLower.includes('audit experience') || textLower.includes('years experience')) {
-      return this.verifyExperienceRequirement(req, indexRecords);
+    // 2. TEAM & CV QUALIFICATIONS (Individual Expert / Consultant / Team requirements)
+    if (
+      catLower === 'team' ||
+      catLower === 'personnel' ||
+      textLower.includes('cv') ||
+      textLower.includes('curriculum vitae') ||
+      textLower.includes('expert') ||
+      textLower.includes('team leader') ||
+      textLower.includes('consultant') ||
+      textLower.includes('auditor') ||
+      textLower.includes('fca') ||
+      textLower.includes('fcca') ||
+      textLower.includes('cisa') ||
+      textLower.includes('education') ||
+      textLower.includes('degree') ||
+      (textLower.includes('years') && (textLower.includes('expert') || textLower.includes('consultant') || textLower.includes('experience of the consultant') || textLower.includes('post qualification')))
+    ) {
+      return this.verifyTeamRequirement(req, indexRecords);
     }
 
-    // 3. TEAM & CV QUALIFICATIONS
-    if (catLower === 'team' || textLower.includes('fca') || textLower.includes('cisa') || textLower.includes('cv') || textLower.includes('expert')) {
-      return this.verifyTeamRequirement(req, indexRecords);
+    // 3. FIRM EXPERIENCE REQUIREMENTS (Institutional track record & past assignments)
+    if (catLower === 'experience' || textLower.includes('similar assignment') || textLower.includes('firm experience') || textLower.includes('track record') || textLower.includes('contracts completed')) {
+      return this.verifyExperienceRequirement(req, indexRecords);
     }
 
     // 4. GENERAL / TECHNICAL REQUIREMENTS

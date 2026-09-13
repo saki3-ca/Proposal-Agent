@@ -6,6 +6,7 @@ export type ClassifiedDocType =
   | 'Financial Template / RFP'
   | 'Past Proposal / Reference'
   | 'CV / Key Expert Profile'
+  | 'Company / Organizational Profile'
   | 'Firm Certification / Legal'
   | 'General Supporting Attachment';
 
@@ -22,6 +23,7 @@ export interface ProcessedPipelineResult {
 
 import { DocumentProcessingService, ProcessedDocumentResponse } from './documentProcessingService';
 import { MarkdownNormalizer } from './markdownNormalizer';
+import { DocumentClassificationService } from './documentClassificationService';
 
 export class LocalDocumentPipeline {
   /**
@@ -57,28 +59,11 @@ export class LocalDocumentPipeline {
   }
 
   /**
-   * 2. Document Classification: Classifies document based on normalized Markdown keywords
+   * 2. Document Classification: Classifies document accurately using DocumentClassificationService
    */
-  static classifyDocument(normalizedMarkdown: string): ClassifiedDocType {
-    const text = normalizedMarkdown.toLowerCase();
-
-    if (text.includes('scope of work') || text.includes('terms of reference') || text.includes('eoi') || text.includes('eligibility')) {
-      return 'TOR/EOI';
-    }
-    if (text.includes('unit rate') || text.includes('fee schedule') || text.includes('financial proposal')) {
-      return 'Financial Template / RFP';
-    }
-    if (text.includes('curriculum vitae') || text.includes('key expert') || text.includes('educational qualification')) {
-      return 'CV / Key Expert Profile';
-    }
-    if (text.includes('icab') || text.includes('tax clearance') || text.includes('trade license')) {
-      return 'Firm Certification / Legal';
-    }
-    if (text.includes('technical proposal') || text.includes('past assignment')) {
-      return 'Past Proposal / Reference';
-    }
-
-    return 'General Supporting Attachment';
+  static classifyDocument(normalizedMarkdown: string, fileName: string = ''): ClassifiedDocType {
+    const result = DocumentClassificationService.classify(fileName, normalizedMarkdown);
+    return result.classifiedType;
   }
 
   /**
