@@ -45,6 +45,7 @@ export const EvidenceMatrixViewer: React.FC<EvidenceMatrixViewerProps> = ({
   const [selectedMatch, setSelectedMatch] = useState<RequirementEvidenceMatch | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [verificationNote, setVerificationNote] = useState('');
+  const [showToast, setShowToast] = useState<string | null>(null);
 
   useEffect(() => {
     const existing = EvidenceMatchingService.getSavedEvidencePackage(project.id);
@@ -59,11 +60,18 @@ export const EvidenceMatrixViewer: React.FC<EvidenceMatrixViewerProps> = ({
   const handleEvaluateEvidence = async () => {
     setIsEvaluating(true);
     try {
-      // Re-index and evaluate package
+      // Re-index Document Library, firm credentials, and Project Documents
       EvidenceIndexingService.buildEvidenceIndex();
+      // Clear previous cached package to force complete re-evaluation
+      try {
+        localStorage.removeItem(`acnabin_evidence_package_${project.id}`);
+      } catch (e) {}
+
       const pkg = await EvidenceMatchingService.evaluateEvidencePackage(project, requirements);
       setEvidencePackage(pkg);
       if (pkg.matches.length > 0) setSelectedMatch(pkg.matches[0]);
+      setShowToast(`✓ Evidence matching refreshed: ${pkg.availableCount} of ${pkg.totalRequirementsEvaluated} requirements verified (${pkg.readinessScore}% readiness)`);
+      setTimeout(() => setShowToast(null), 4000);
     } catch (e) {
       console.error('Failed to evaluate evidence package:', e);
     } finally {
@@ -178,6 +186,22 @@ export const EvidenceMatrixViewer: React.FC<EvidenceMatrixViewerProps> = ({
             </button>
           </div>
         </div>
+
+        {/* Live Re-Evaluation Confirmation Toast */}
+        {showToast && (
+          <div className="mt-3 p-3 bg-emerald-50 border border-emerald-300 rounded-lg text-emerald-900 text-xs font-bold flex items-center justify-between animate-fadeIn">
+            <div className="flex items-center space-x-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{showToast}</span>
+            </div>
+            <button
+              onClick={() => setShowToast(null)}
+              className="text-emerald-700 hover:text-emerald-900 text-xs font-semibold"
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
         {/* Summary Metrics */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-4 pt-4 border-t border-slate-100 text-xs">

@@ -24,7 +24,7 @@ export class EvidenceMatchingService {
     requirements: Requirement[],
     contentPlan?: ProposalContentPlan
   ): Promise<EvidencePackage> {
-    const evidenceIndex = EvidenceIndexingService.getSavedEvidenceIndex();
+    const evidenceIndex = EvidenceIndexingService.buildEvidenceIndex();
     const existingPackage = this.getSavedEvidencePackage(project.id);
 
     const matches: RequirementEvidenceMatch[] = [];
@@ -356,15 +356,15 @@ export class EvidenceMatchingService {
     indexRecords: EvidenceRecord[]
   ): { matches: RequirementEvidenceMatch[]; primaryStatus: MatchStatus; gap?: EvidenceGap } {
     const textLower = req.requirementText.toLowerCase();
-    const cvCandidates = indexRecords.filter(r => r.category === 'CV');
+    const cvCandidates = indexRecords.filter(r => r.category === 'CV' || r.evidenceType === 'CV');
 
     let matchedCv = cvCandidates.find(cv => {
-      const q = cv.sourceQuote.toLowerCase();
-      if (textLower.includes('leader') || textLower.includes('partner')) {
-        return q.includes('partner') || q.includes('team leader') || q.includes('aminul');
+      const q = (cv.sourceQuote + ' ' + cv.title).toLowerCase();
+      if (textLower.includes('leader') || textLower.includes('partner') || textLower.includes('lead')) {
+        return q.includes('partner') || q.includes('team leader') || q.includes('aminul') || q.includes('alam');
       }
-      if (textLower.includes('auditor') || textLower.includes('cisa')) {
-        return q.includes('cisa') || q.includes('director') || q.includes('mostakin');
+      if (textLower.includes('auditor') || textLower.includes('audit team') || textLower.includes('key personnel') || textLower.includes('cisa')) {
+        return q.includes('audit') || q.includes('cisa') || q.includes('team') || q.includes('mostakin') || q.includes('aminul');
       }
       return true;
     });
