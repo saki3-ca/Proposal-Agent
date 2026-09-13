@@ -1,0 +1,100 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    
+    /* Odoo ERP Color Palette */
+    --odoo-purple: #714B67;
+    --odoo-purple-dark: #51304A;
+    --odoo-purple-light: #F3EEF2;
+    --odoo-header-bg: #26292E;
+    --odoo-body-bg: #F8F9FA;
+    --odoo-surface: #FFFFFF;
+    --odoo-border: #DEE2E6;
+    --odoo-text-main: #212529;
+    --odoo-text-muted: #6C757D;
+  }
+  
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--odoo-body-bg);
+    color: var(--odoo-text-main);
+    font-size: 13px;
+    line-height: 1.4;
+  }
+}
+
+/* Odoo ERP Table & Layout Density Utilities */
+.odoo-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.odoo-table th {
+  background-color: #F1F3F5;
+  color: #495057;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-bottom: 1px solid #DEE2E6;
+  text-align: left;
+}
+
+.odoo-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid #E9ECEF;
+}
+
+.odoo-table tr:hover {
+  background-color: #F8F9FA;
+}
+
+/* ERP Control Bar Buttons */
+.btn-odoo-primary {
+  background-color: #714B67;
+  color: #FFFFFF;
+  font-weight: 600;
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  transition: background-all 0.15s ease;
+}
+
+.btn-odoo-primary:hover {
+  background-color: #51304A;
+}
+
+.btn-odoo-secondary {
+  background-color: #FFFFFF;
+  color: #343A40;
+  border: 1px solid #CED4DA;
+  font-weight: 500;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 4px;
+}
+
+.btn-odoo-secondary:hover {
+  background-color: #F8F9FA;
+  border-color: #ADB5BD;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #F1F3F5;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #CED4DA;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #6C757D;
+}
