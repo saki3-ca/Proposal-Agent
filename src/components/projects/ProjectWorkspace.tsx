@@ -142,6 +142,17 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({ project, onN
     });
   };
 
+  const handleDocumentDelete = (docId: string) => {
+    setDocuments((prev) => {
+      const updated = prev.filter((d) => d.id !== docId);
+      ProposalDatabaseService.saveProjectDocuments(project.id, updated);
+      return updated;
+    });
+    if (selectedDoc?.id === docId) {
+      setSelectedDoc(null);
+    }
+  };
+
   return (
     <div className="space-y-4 font-sans">
       {/* 5-Stage Odoo Pipeline Status Bar */}
@@ -377,12 +388,17 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({ project, onN
           <>
             {docSubTab === 'docs' && (
               selectedDoc ? (
-                <DocumentViewer document={selectedDoc} onBack={() => setSelectedDoc(null)} />
+                <DocumentViewer
+                  document={selectedDoc}
+                  onBack={() => setSelectedDoc(null)}
+                  onDelete={(doc) => handleDocumentDelete(doc.id)}
+                />
               ) : (
                 <DocumentUpload
                   documents={documents}
                   onUpload={handleDocumentUpload}
                   onViewDocument={(doc) => setSelectedDoc(doc)}
+                  onDelete={handleDocumentDelete}
                 />
               )
             )}

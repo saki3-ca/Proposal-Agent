@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { ProjectDocument } from '../../types';
-import { FileText, FileCode, CheckCircle2, Copy, Download, ExternalLink, ChevronLeft } from 'lucide-react';
+import { FileText, FileCode, CheckCircle2, Copy, Download, ExternalLink, ChevronLeft, Trash2 } from 'lucide-react';
 
 interface DocumentViewerProps {
   document: ProjectDocument | null;
   onBack: () => void;
+  onDelete?: (doc: ProjectDocument) => void;
 }
 
-export const DocumentViewer: React.FC<DocumentViewerProps> = ({ document: doc, onBack }) => {
+export const DocumentViewer: React.FC<DocumentViewerProps> = ({ document: doc, onBack, onDelete }) => {
   const [activeTab, setActiveTab] = useState<'markdown' | 'original'>('markdown');
   const [copied, setCopied] = useState(false);
 
@@ -21,10 +22,19 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({ document: doc, o
     }
   };
 
+  const handleDelete = () => {
+    if (window.confirm(`Are you sure you want to permanently delete "${doc.fileName}"?`)) {
+      if (onDelete) {
+        onDelete(doc);
+      }
+      onBack();
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Top Header Bar */}
-      <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-2xs flex items-center justify-between">
+      <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-2xs flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center space-x-3">
           <button
             onClick={onBack}
@@ -47,7 +57,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({ document: doc, o
             <button
               onClick={() => setActiveTab('markdown')}
               className={`px-3 py-1 text-xs font-semibold rounded transition-colors ${
-                activeTab === 'markdown' ? 'bg-white text-indigo-600 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                activeTab === 'markdown' ? 'bg-white text-indigo-600 shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               Extracted Markdown
@@ -55,7 +65,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({ document: doc, o
             <button
               onClick={() => setActiveTab('original')}
               className={`px-3 py-1 text-xs font-semibold rounded transition-colors ${
-                activeTab === 'original' ? 'bg-white text-indigo-600 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                activeTab === 'original' ? 'bg-white text-indigo-600 shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               Original Source Reference
@@ -69,6 +79,17 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({ document: doc, o
             <Copy className="w-3.5 h-3.5" />
             <span>{copied ? 'Copied!' : 'Copy Text'}</span>
           </button>
+
+          {onDelete && (
+            <button
+              onClick={handleDelete}
+              className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-semibold rounded flex items-center space-x-1 transition-colors"
+              title="Delete this document"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-red-600" />
+              <span>Delete</span>
+            </button>
+          )}
         </div>
       </div>
 

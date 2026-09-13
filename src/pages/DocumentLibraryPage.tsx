@@ -27,7 +27,8 @@ import {
   ExternalLink,
   Tag,
   FileCheck2,
-  HardDrive
+  HardDrive,
+  Trash2
 } from 'lucide-react';
 
 export type LibraryCategory =
@@ -96,6 +97,18 @@ export const DocumentLibraryPage: React.FC = () => {
     setDocuments((prev) =>
       prev.map((d) => (d.id === docId ? { ...d, kbCategory: newCat } : d))
     );
+  };
+
+  const handleDeleteDocument = (docId: string, e?: React.SyntheticEvent) => {
+    if (e) e.stopPropagation();
+    const docToDelete = documents.find((d) => d.id === docId);
+    const confirmName = docToDelete?.fileName || 'this document';
+    if (window.confirm(`Are you sure you want to permanently delete "${confirmName}" from the Document Library?`)) {
+      setDocuments((prev) => prev.filter((d) => d.id !== docId));
+      if (selectedDoc?.id === docId) {
+        setSelectedDoc(null);
+      }
+    }
   };
 
   const filteredDocs = documents.filter((doc) => {
@@ -200,7 +213,13 @@ export const DocumentLibraryPage: React.FC = () => {
   };
 
   if (selectedDoc) {
-    return <DocumentViewer document={selectedDoc} onBack={() => setSelectedDoc(null)} />;
+    return (
+      <DocumentViewer
+        document={selectedDoc}
+        onBack={() => setSelectedDoc(null)}
+        onDelete={(doc) => handleDeleteDocument(doc.id)}
+      />
+    );
   }
 
   return (
@@ -533,9 +552,18 @@ export const DocumentLibraryPage: React.FC = () => {
                       <span>{doc.pageCount} pgs</span>
                     </div>
 
-                    <div className="flex items-center space-x-1 text-[#1D8C8C] group-hover:text-[#156d6d] font-bold text-xs">
-                      <Eye className="w-3.5 h-3.5" />
-                      <span>Inspect</span>
+                    <div className="flex items-center space-x-2">
+                      <div className="flex items-center space-x-1 text-[#1D8C8C] group-hover:text-[#156d6d] font-bold text-xs">
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>Inspect</span>
+                      </div>
+                      <button
+                        onClick={(e) => handleDeleteDocument(doc.id, e)}
+                        className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                        title="Delete document"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -560,7 +588,7 @@ export const DocumentLibraryPage: React.FC = () => {
                   <th className="w-20 text-white whitespace-nowrap">Size</th>
                   <th className="w-24 text-white whitespace-nowrap">Date</th>
                   <th className="w-32 text-white whitespace-nowrap">MarkItDown</th>
-                  <th className="w-16 text-center text-white whitespace-nowrap">Action</th>
+                  <th className="w-24 text-center text-white whitespace-nowrap">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -638,15 +666,24 @@ export const DocumentLibraryPage: React.FC = () => {
                         </span>
                       </td>
                       <td className="text-center">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedDoc(doc);
-                          }}
-                          className="px-2.5 py-1 bg-slate-100 hover:bg-[#1D8C8C] hover:text-white text-slate-700 text-[11px] font-bold rounded transition-colors"
-                        >
-                          Inspect
-                        </button>
+                        <div className="flex items-center justify-center space-x-1.5">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedDoc(doc);
+                            }}
+                            className="px-2.5 py-1 bg-slate-100 hover:bg-[#1D8C8C] hover:text-white text-slate-700 text-[11px] font-bold rounded transition-colors"
+                          >
+                            Inspect
+                          </button>
+                          <button
+                            onClick={(e) => handleDeleteDocument(doc.id, e)}
+                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                            title="Delete document"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))

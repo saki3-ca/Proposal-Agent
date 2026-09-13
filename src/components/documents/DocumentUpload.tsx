@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Upload, FileText, CheckCircle2, RefreshCw, FileCode, Plus } from 'lucide-react';
+import { Upload, FileText, CheckCircle2, RefreshCw, FileCode, Plus, Trash2 } from 'lucide-react';
 import { ProjectDocument, ProcessingStatus } from '../../types';
 import { DocumentProcessingService } from '../../services/documentProcessingService';
 
@@ -7,12 +7,14 @@ interface DocumentUploadProps {
   documents: ProjectDocument[];
   onUpload: (newDoc: ProjectDocument) => void;
   onViewDocument: (doc: ProjectDocument) => void;
+  onDelete?: (docId: string) => void;
 }
 
 export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   documents,
   onUpload,
-  onViewDocument
+  onViewDocument,
+  onDelete
 }) => {
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -237,7 +239,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                   </div>
                 </div>
 
-                <div className="shrink-0 flex items-center space-x-3">
+                <div className="shrink-0 flex items-center space-x-2">
                   {getStatusBadge(doc.processingStatus)}
                   <button
                     onClick={(e) => {
@@ -248,6 +250,20 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
                   >
                     View Markdown & Source
                   </button>
+                  {onDelete && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (window.confirm(`Delete "${doc.fileName}" from this proposal project?`)) {
+                          onDelete(doc.id);
+                        }
+                      }}
+                      className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                      title="Delete uploaded document"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               </div>
             ))
