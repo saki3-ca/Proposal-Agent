@@ -1351,8 +1351,21 @@ export class DocxGenerationService {
     });
 
     // 5. PACK TO BINARY & MANDATORY OPENXML / CONTENT INTEGRITY VALIDATION
-    const buffer = await Packer.toBuffer(doc);
-    const uint8Array = new Uint8Array(buffer);
+    let uint8Array: Uint8Array;
+    try {
+      if (typeof Packer.toBlob === 'function') {
+        const blob = await Packer.toBlob(doc);
+        const arrayBuffer = await blob.arrayBuffer();
+        uint8Array = new Uint8Array(arrayBuffer);
+      } else {
+        const base64 = await Packer.toBase64String(doc);
+        uint8Array = base64ToUint8Array(base64);
+      }
+    } catch (e) {
+      // Fallback to base64 packing if toBlob encounters environment restrictions
+      const base64 = await Packer.toBase64String(doc);
+      uint8Array = base64ToUint8Array(base64);
+    }
 
     // MANDATORY STRUCTURAL & OPENXML VALIDATION BEFORE PROCEEDING
     const validation = await DocxGenerationService.validateDocxBinary(uint8Array);
