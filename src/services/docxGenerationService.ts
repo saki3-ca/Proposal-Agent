@@ -1369,21 +1369,7 @@ export class DocxGenerationService {
     const base64Data = uint8ArrayToBase64(uint8Array);
 
     const fileName = `ACNABIN_Technical_Proposal_${draft.projectId}_v${draft.version}.docx`;
-    let diskFilePath: string | undefined = undefined;
-
-    // PERSISTENCE LEAF 1: Write physical binary file to local disk output folder when running in Node.js
-    if (typeof process !== 'undefined' && process.versions && process.versions.node) {
-      try {
-        const outputDir = path.join(process.cwd(), 'output');
-        if (!fs.existsSync(outputDir)) {
-          fs.mkdirSync(outputDir, { recursive: true });
-        }
-        diskFilePath = path.join(outputDir, fileName);
-        fs.writeFileSync(diskFilePath, uint8Array);
-      } catch (fsErr) {
-        console.warn('Physical disk file writing skipped or failed:', fsErr);
-      }
-    }
+    const diskFilePath: string | undefined = undefined;
 
     const metadata: DocxArtifactMetadata = {
       id: `docx_art_${Date.now()}`,
