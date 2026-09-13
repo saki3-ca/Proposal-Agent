@@ -11,6 +11,7 @@ import {
   FindingStatus
 } from '../../types';
 import { ProposalComplianceAuditService } from '../../services/proposalComplianceAuditService';
+import { ProposalDraftingService } from '../../services/proposalDraftingService';
 import { DocxGenerationService } from '../../services/docxGenerationService';
 import {
   ShieldCheck,
@@ -31,7 +32,8 @@ import {
   UserCheck,
   AlertCircle,
   History,
-  Edit3
+  Edit3,
+  Wand2
 } from 'lucide-react';
 
 interface ProposalComplianceWorkbenchProps {
@@ -99,6 +101,23 @@ export const ProposalComplianceWorkbench: React.FC<ProposalComplianceWorkbenchPr
   const handleRunAudit = async () => {
     setIsLoading(true);
     try {
+      // 1. Resolve all draft placeholders using verified partner & firm records
+      ProposalDraftingService.resolveAllPlaceholders(projectId);
+      // 2. Clear stale findings storage to force fresh dual-model audit
+      localStorage.removeItem(`acnabin_compliance_findings_${projectId}`);
+      // 3. Re-run fresh compliance audit
+      await ProposalComplianceAuditService.runComplianceAudit(projectId);
+      await loadAuditData();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAutoResolve = async () => {
+    setIsLoading(true);
+    try {
+      ProposalDraftingService.resolveAllPlaceholders(projectId);
+      localStorage.removeItem(`acnabin_compliance_findings_${projectId}`);
       await ProposalComplianceAuditService.runComplianceAudit(projectId);
       await loadAuditData();
     } finally {
@@ -173,6 +192,17 @@ export const ProposalComplianceWorkbench: React.FC<ProposalComplianceWorkbenchPr
 
           <div className="flex items-center space-x-3">
             {getResultBadge()}
+
+            {audit.criticalFindingCount > 0 && (
+              <button
+                onClick={handleAutoResolve}
+                disabled={isLoading}
+                className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow-xs flex items-center transition disabled:opacity-50"
+              >
+                <Wand2 className="w-3.5 h-3.5 mr-1.5" />
+                Auto-Fix & Resolve Findings
+              </button>
+            )}
 
             <button
               onClick={handleRunAudit}
