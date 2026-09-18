@@ -8,6 +8,7 @@ __pycache__/
 
 # Production build output
 dist/
+backend/dist/
 scratch_dist/
 build/
 output/
@@ -24,4 +25,3 @@ scratch/
 Thumbs.db
 .vscode/
 .idea/
-
