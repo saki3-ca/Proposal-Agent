@@ -92,7 +92,7 @@ export const Header: React.FC<HeaderProps> = ({
             className="px-2.5 py-1 bg-[#1D8C8C] hover:bg-[#156d6d] text-white font-bold rounded text-xs flex items-center space-x-1 transition-colors shadow-2xs"
           >
             <Upload className="w-3.5 h-3.5" />
-            <span>+ Upload Documents</span>
+            <span>Upload Documents</span>
           </button>
         )}
 

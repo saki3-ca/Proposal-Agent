@@ -96,7 +96,7 @@ export const ProjectList: React.FC<ProjectListProps> = ({ projects, onSelectProj
               className="px-4 py-2 bg-[#1D8C8C] hover:bg-[#156d6d] text-white text-xs font-bold rounded shadow-2xs transition-colors flex items-center space-x-1.5"
             >
               <Plus className="w-4 h-4" />
-              <span>+ New Proposal Project</span>
+              <span>New Proposal Project</span>
             </button>
           </div>
         </div>
@@ -249,7 +249,7 @@ export const ProjectList: React.FC<ProjectListProps> = ({ projects, onSelectProj
               {activeProjects.length === 0 ? (
                 <tr>
                   <td colSpan={11} className="text-center py-8 text-slate-500 italic">
-                    No active proposals matching search filter criteria. Click + New Proposal to add.
+                    No active proposals matching search filter criteria. Click New Proposal Project to add.
                   </td>
                 </tr>
               ) : (

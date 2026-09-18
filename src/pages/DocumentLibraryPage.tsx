@@ -479,7 +479,7 @@ export const DocumentLibraryPage: React.FC = () => {
               className="px-4 py-2 bg-[#1D8C8C] hover:bg-[#156d6d] text-white text-xs font-bold rounded shadow-sm transition-all flex items-center space-x-1.5"
             >
               {isUploading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-              <span>{isUploading ? 'Processing MarkItDown...' : '+ Upload Documents'}</span>
+              <span>{isUploading ? 'Processing MarkItDown...' : 'Upload Documents'}</span>
             </button>
           </div>
         </div>
