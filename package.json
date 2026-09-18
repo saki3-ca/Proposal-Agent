@@ -4,7 +4,9 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently -k -n \"frontend,backend\" -c \"cyan,magenta\" \"vite\" \"python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload\"",
+    "dev:frontend": "vite",
+    "dev:backend": "python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload",
     "backend": "python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload",
     "backend:test": "python backend/test_processor.py",
     "build": "tsc && vite build && node -e \"const fs=require('fs'); if(fs.existsSync('dist')){ fs.cpSync('dist', 'backend/dist', {recursive: true, force: true}); }\"",
@@ -34,6 +36,7 @@
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
     "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^10.0.5",
     "tailwindcss": "^4.0.7",
     "typescript": "^5.7.3",
     "vite": "^6.1.0"

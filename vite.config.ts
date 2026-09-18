@@ -10,6 +10,14 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  server: {
+    port: 5173,
+    proxy: {
+      '/process-document': 'http://127.0.0.1:8000',
+      '/health': 'http://127.0.0.1:8000',
+      '/analyze-reference-docx': 'http://127.0.0.1:8000',
+    },
+  },
   build: {
     outDir: 'dist',
     emptyOutDir: true,
