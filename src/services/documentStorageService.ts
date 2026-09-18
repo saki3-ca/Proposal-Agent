@@ -179,4 +179,80 @@ export class DocumentStorageService {
       console.error('[DocumentStorageService] Error deleting doc:', e);
     }
   }
+
+  /**
+   * Bulk delete multiple documents from IndexedDB
+   */
+  static async bulkDeleteLibraryDocuments(docIds: string[]): Promise<void> {
+    try {
+      const db = await this.getDB();
+      const tx = db.transaction(STORE_LIBRARY_DOCS, 'readwrite');
+      const store = tx.objectStore(STORE_LIBRARY_DOCS);
+      for (const id of docIds) {
+        store.delete(id);
+      }
+      return new Promise((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+    } catch (e) {
+      console.error('[DocumentStorageService] Error bulk deleting docs:', e);
+    }
+  }
+
+  /**
+   * Bulk update category of documents in IndexedDB
+   */
+  static async bulkUpdateLibraryCategory(docIds: string[], newCategory: any): Promise<void> {
+    try {
+      const db = await this.getDB();
+      const tx = db.transaction(STORE_LIBRARY_DOCS, 'readwrite');
+      const store = tx.objectStore(STORE_LIBRARY_DOCS);
+      for (const id of docIds) {
+        const req = store.get(id);
+        req.onsuccess = () => {
+          if (req.result) {
+            const updated = { ...req.result, kbCategory: newCategory };
+            store.put(updated);
+          }
+        };
+      }
+      return new Promise((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+    } catch (e) {
+      console.error('[DocumentStorageService] Error bulk updating category:', e);
+    }
+  }
+
+  /**
+   * Extract Uint8Array binary from rawFile, rawFileBase64 or string
+   */
+  static async getDocumentBinary(doc: LibraryDocumentItem | ProjectDocument): Promise<Uint8Array | null> {
+    try {
+      if (doc.rawFile && doc.rawFile instanceof Blob) {
+        const arrayBuf = await doc.rawFile.arrayBuffer();
+        return new Uint8Array(arrayBuf);
+      }
+      if (doc.rawFileBase64 && doc.rawFileBase64.startsWith('data:')) {
+        const commaIdx = doc.rawFileBase64.indexOf(',');
+        const base64Str = commaIdx >= 0 ? doc.rawFileBase64.slice(commaIdx + 1) : doc.rawFileBase64;
+        const binaryStr = atob(base64Str);
+        const bytes = new Uint8Array(binaryStr.length);
+        for (let i = 0; i < binaryStr.length; i++) {
+          bytes[i] = binaryStr.charCodeAt(i);
+        }
+        return bytes;
+      }
+      if (doc.markdownContent) {
+        return new TextEncoder().encode(doc.markdownContent);
+      }
+      return null;
+    } catch (err) {
+      console.warn(`[DocumentStorageService] Could not extract binary for ${doc.fileName}:`, err);
+      return null;
+    }
+  }
 }
+

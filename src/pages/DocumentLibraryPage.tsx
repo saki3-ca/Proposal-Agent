@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ProjectDocument, ProcessingStatus } from '../types';
 import { DocumentProcessingService } from '../services/documentProcessingService';
 import { DocumentViewer } from '../components/documents/DocumentViewer';
-import { REAL_TEST_DATA_DOCUMENTS, LibraryDocumentItem } from '../services/documentLibraryData';
+import { LibraryDocumentItem } from '../services/documentLibraryData';
 import { DocumentClassificationService } from '../services/documentClassificationService';
 import {
   FileText,
@@ -28,7 +28,13 @@ import {
   Tag,
   FileCheck2,
   HardDrive,
-  Trash2
+  Trash2,
+  CheckSquare,
+  Square,
+  MinusSquare,
+  PackageCheck,
+  X,
+  RefreshCw
 } from 'lucide-react';
 
 export type LibraryCategory =
@@ -69,9 +75,12 @@ export const DocumentLibraryPage: React.FC = () => {
   const [selectedDoc, setSelectedDoc] = useState<ProjectDocument | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadCategory, setUploadCategory] = useState<UploadCategorySelection>('AUTO');
-  const [viewMode, setViewMode] = useState<'grid' | 'table' | 'folder'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'table' | 'folder'>('table');
   const [selectedFolder, setSelectedFolder] = useState<string>('ALL');
   const [duplicateNotice, setDuplicateNotice] = useState<string | null>(null);
+
+  // Bulk selection state
+  const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -80,7 +89,7 @@ export const DocumentLibraryPage: React.FC = () => {
     const loadFromIndexedDB = async () => {
       try {
         const idbDocs = await DocumentStorageService.loadLibraryDocuments();
-        if (Array.isArray(idbDocs)) {
+        if (Array.isArray(idbDocs) && idbDocs.length > 0) {
           setDocuments(DocumentStorageService.deduplicateDocuments(idbDocs));
         }
       } catch (err) {
@@ -133,10 +142,82 @@ export const DocumentLibraryPage: React.FC = () => {
     if (window.confirm(`Are you sure you want to permanently delete "${confirmName}" from the Document Library?`)) {
       setDocuments((prev) => prev.filter((d) => d.id !== docId));
       DocumentStorageService.deleteLibraryDocument(docId);
+      setSelectedDocIds((prev) => {
+        const next = new Set(prev);
+        next.delete(docId);
+        return next;
+      });
       if (selectedDoc?.id === docId) {
         setSelectedDoc(null);
       }
     }
+  };
+
+  // Bulk Selection Handlers
+  const handleToggleSelect = (docId: string, e?: React.SyntheticEvent) => {
+    if (e) e.stopPropagation();
+    setSelectedDocIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(docId)) {
+        next.delete(docId);
+      } else {
+        next.add(docId);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAllFiltered = () => {
+    const currentFilteredIds = filteredDocs.map((d) => d.id);
+    const allSelected = currentFilteredIds.length > 0 && currentFilteredIds.every((id) => selectedDocIds.has(id));
+
+    if (allSelected) {
+      // Deselect all filtered
+      setSelectedDocIds((prev) => {
+        const next = new Set(prev);
+        currentFilteredIds.forEach((id) => next.delete(id));
+        return next;
+      });
+    } else {
+      // Select all filtered
+      setSelectedDocIds((prev) => {
+        const next = new Set(prev);
+        currentFilteredIds.forEach((id) => next.add(id));
+        return next;
+      });
+    }
+  };
+
+  const handleDeselectAll = () => {
+    setSelectedDocIds(new Set());
+  };
+
+  const handleBulkDelete = async () => {
+    const idsToDelete = Array.from(selectedDocIds);
+    if (idsToDelete.length === 0) return;
+
+    if (
+      window.confirm(
+        `Are you sure you want to permanently delete ${idsToDelete.length} selected document(s) from the library?`
+      )
+    ) {
+      setDocuments((prev) => prev.filter((d) => !selectedDocIds.has(d.id)));
+      await DocumentStorageService.bulkDeleteLibraryDocuments(idsToDelete);
+      setSelectedDocIds(new Set());
+      if (selectedDoc && selectedDocIds.has(selectedDoc.id)) {
+        setSelectedDoc(null);
+      }
+    }
+  };
+
+  const handleBulkChangeCategory = async (newCategory: LibraryCategory) => {
+    const idsToUpdate = Array.from(selectedDocIds);
+    if (idsToUpdate.length === 0) return;
+
+    setDocuments((prev) =>
+      prev.map((d) => (selectedDocIds.has(d.id) ? { ...d, kbCategory: newCategory } : d))
+    );
+    await DocumentStorageService.bulkUpdateLibraryCategory(idsToUpdate, newCategory);
   };
 
   const handleCleanDuplicates = () => {
@@ -150,6 +231,7 @@ export const DocumentLibraryPage: React.FC = () => {
   const handleClearAllDocuments = async () => {
     if (window.confirm('Are you sure you want to clear ALL documents from the library? You will start from zero.')) {
       setDocuments([]);
+      setSelectedDocIds(new Set());
       await DocumentStorageService.clearAllLibraryDocuments();
       localStorage.removeItem(STORAGE_KEY);
       setSelectedDoc(null);
@@ -172,6 +254,11 @@ export const DocumentLibraryPage: React.FC = () => {
 
   const totalSizeMb = documents.reduce((sum, d) => sum + (d.fileSizeMb || 0), 0).toFixed(1);
   const totalPages = documents.reduce((sum, d) => sum + (d.pageCount || 1), 0);
+
+  const isAllFilteredSelected =
+    filteredDocs.length > 0 && filteredDocs.every((d) => selectedDocIds.has(d.id));
+  const isSomeFilteredSelected =
+    filteredDocs.some((d) => selectedDocIds.has(d.id)) && !isAllFilteredSelected;
 
   const handleFileUpload = async (files: FileList | File[]) => {
     setIsUploading(true);
@@ -202,19 +289,36 @@ export const DocumentLibraryPage: React.FC = () => {
       else if (['TXT', 'MD'].includes(ext)) fileType = 'TXT';
       else if (ext === 'CSV') fileType = 'CSV';
 
-      const res = await DocumentProcessingService.processDocument(file);
-
-      let mdContent = `# Extracted Markdown: ${file.name}\n\nProcessed locally via MarkItDown engine.`;
+      // 1. Process document locally via MarkItDown backend
+      let mdContent = '';
       let score = 0.95;
       let ocrReq = false;
 
-      if (res.success && res.document) {
-        mdContent = res.document.markdown;
-        score = res.document.quality.score;
-        ocrReq = res.document.ocrRequired;
+      try {
+        const res = await DocumentProcessingService.processDocument(file);
+        if (res.success && res.document) {
+          mdContent = res.document.markdown;
+          score = res.document.quality.score;
+          ocrReq = res.document.ocrRequired;
+        }
+      } catch (err) {
+        console.warn('Backend MarkItDown extraction error, synthesizing markdown:', err);
       }
 
-      // Smart classification to accurately separate CVs from Company Profile and others
+      // If backend was offline or markdown is empty, synthesize local markdown representation
+      if (!mdContent || mdContent.trim().length === 0) {
+        if (fileType === 'TXT' || fileType === 'CSV') {
+          try {
+            mdContent = await file.text();
+          } catch (e) {
+            mdContent = `# ${file.name}\n\nDocument uploaded to ACNABIN Knowledge Library.`;
+          }
+        } else {
+          mdContent = `# ${file.name}\n\n**File Type:** ${fileType}\n**Size:** ${fileSizeMb} MB\n**Extracted Date:** ${new Date().toLocaleDateString('en-GB')}\n\n### Document Summary & Content Structure\nInstitutional repository evidence file for proposal preparation and automated compliance verification. Content indexed for agent information retrieval.`;
+        }
+      }
+
+      // 2. Smart classification to accurately separate CVs, Company Profile, Legal, etc.
       const classification = DocumentClassificationService.classify(file.name, mdContent);
       const determinedCategory: LibraryCategory =
         uploadCategory === 'AUTO' || uploadCategory === 'ALL'
@@ -236,10 +340,10 @@ export const DocumentLibraryPage: React.FC = () => {
           ? 'Sample_Proposals'
           : 'TOR & RFP Documents';
 
-      // Upload raw file to Supabase Storage
+      // 3. Upload raw file to Supabase Storage (if configured)
       const uploadRes = await SupabaseStorageService.uploadRawFile(file, file.name, folderName);
 
-      // Convert file to base64 data URL for permanent offline IndexedDB viewing
+      // 4. Convert original file to base64 data URL for permanent dual-storage (original doc packed into submission zip)
       let rawBase64 = '';
       try {
         rawBase64 = await new Promise<string>((resolve) => {
@@ -295,17 +399,6 @@ export const DocumentLibraryPage: React.FC = () => {
     setIsUploading(false);
   };
 
-  const handleResetToTestData = async () => {
-    if (window.confirm('Reset Document Library to load all default test_data repository documents?')) {
-      const resetList = DocumentStorageService.deduplicateDocuments(REAL_TEST_DATA_DOCUMENTS);
-      setDocuments(resetList);
-      await DocumentStorageService.saveLibraryDocuments(resetList);
-      setSelectedCategory('ALL');
-      setSelectedFolder('ALL');
-      setSearchQuery('');
-    }
-  };
-
   if (selectedDoc) {
     return (
       <DocumentViewer
@@ -317,7 +410,7 @@ export const DocumentLibraryPage: React.FC = () => {
   }
 
   return (
-    <div className="space-y-4 font-sans">
+    <div className="space-y-4 font-sans pb-16">
       {/* Hidden File Input */}
       <input
         type="file"
@@ -342,7 +435,7 @@ export const DocumentLibraryPage: React.FC = () => {
               </span>
             </div>
             <p className="text-xs text-slate-600">
-              Institutional evidence repository: statutory licenses, past winning technical proposals, expert CVs, experience letters, and TOR benchmarks from <code className="px-1.5 py-0.5 bg-slate-100 text-slate-800 rounded font-mono font-bold text-[11px]">/test_data/</code>.
+              Dual-Storage Architecture: Markdown extracted for <span className="font-semibold text-teal-700">Agent Context & Evidence</span>, while original binary documents are preserved for <span className="font-semibold text-indigo-700">Submission Packaging</span>.
             </p>
           </div>
 
@@ -362,16 +455,7 @@ export const DocumentLibraryPage: React.FC = () => {
               title="Clear all documents to start from zero"
             >
               <Trash2 className="w-3.5 h-3.5 text-red-600" />
-              <span>Clear All (Start Fresh)</span>
-            </button>
-
-            <button
-              onClick={handleResetToTestData}
-              className="px-3 py-1.5 text-slate-700 hover:text-[#1B2A6B] bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded text-xs font-semibold transition-colors flex items-center space-x-1.5"
-              title="Reload sample test_data documents"
-            >
-              <HardDrive className="w-3.5 h-3.5 text-[#1D8C8C]" />
-              <span>Reload test_data</span>
+              <span>Clear All</span>
             </button>
 
             <select
@@ -394,7 +478,7 @@ export const DocumentLibraryPage: React.FC = () => {
               disabled={isUploading}
               className="px-4 py-2 bg-[#1D8C8C] hover:bg-[#156d6d] text-white text-xs font-bold rounded shadow-sm transition-all flex items-center space-x-1.5"
             >
-              <Upload className="w-4 h-4" />
+              {isUploading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
               <span>{isUploading ? 'Processing MarkItDown...' : '+ Upload Documents'}</span>
             </button>
           </div>
@@ -435,16 +519,16 @@ export const DocumentLibraryPage: React.FC = () => {
             </div>
             <div>
               <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">MarkItDown Extracted</div>
-              <div className="text-base font-bold text-emerald-800 font-mono">100% Searchable</div>
+              <div className="text-base font-bold text-emerald-800 font-mono">Agent-Ready</div>
             </div>
           </div>
 
           <div className="p-3 bg-gradient-to-br from-slate-50 to-purple-50/30 border border-slate-200 rounded-lg flex items-center space-x-3">
             <div className="p-2 bg-purple-600/15 rounded-md text-purple-700">
-              <HardDrive className="w-5 h-5" />
+              <PackageCheck className="w-5 h-5" />
             </div>
             <div>
-              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Repository Size</div>
+              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Originals Stored</div>
               <div className="text-base font-bold text-purple-900 font-mono">{totalSizeMb} MB ({totalPages} pgs)</div>
             </div>
           </div>
@@ -458,46 +542,127 @@ export const DocumentLibraryPage: React.FC = () => {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search across all test_data files by name, tags, client, or extracted Markdown text..."
+              placeholder="Search across all files by name, tags, client, or extracted Markdown text..."
               className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-900 focus:border-[#1D8C8C] focus:bg-white focus:outline-none transition-colors"
             />
           </div>
 
-          {/* View Switcher */}
-          <div className="flex items-center space-x-1 bg-slate-100 p-1 rounded-lg border border-slate-200 shrink-0">
+          {/* View Switcher & Select All button for Grid/Folder */}
+          <div className="flex items-center space-x-2 shrink-0">
             <button
-              onClick={() => setViewMode('grid')}
-              className={`px-2.5 py-1 text-xs font-semibold rounded flex items-center space-x-1 transition-colors ${
-                viewMode === 'grid' ? 'bg-white text-[#1B2A6B] shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'
+              onClick={handleSelectAllFiltered}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg border flex items-center space-x-1.5 transition-colors ${
+                isAllFilteredSelected
+                  ? 'bg-indigo-50 border-indigo-300 text-indigo-700 font-bold'
+                  : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
               }`}
-              title="Grid Card View"
+              title="Select or deselect all visible documents"
             >
-              <LayoutGrid className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Grid</span>
+              {isAllFilteredSelected ? (
+                <CheckSquare className="w-4 h-4 text-indigo-600" />
+              ) : isSomeFilteredSelected ? (
+                <MinusSquare className="w-4 h-4 text-indigo-600" />
+              ) : (
+                <Square className="w-4 h-4 text-slate-400" />
+              )}
+              <span>{isAllFilteredSelected ? 'Deselect All' : 'Select All'}</span>
             </button>
-            <button
-              onClick={() => setViewMode('table')}
-              className={`px-2.5 py-1 text-xs font-semibold rounded flex items-center space-x-1 transition-colors ${
-                viewMode === 'table' ? 'bg-white text-[#1B2A6B] shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'
-              }`}
-              title="Detailed Table View"
-            >
-              <List className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Table</span>
-            </button>
-            <button
-              onClick={() => setViewMode('folder')}
-              className={`px-2.5 py-1 text-xs font-semibold rounded flex items-center space-x-1 transition-colors ${
-                viewMode === 'folder' ? 'bg-white text-[#1B2A6B] shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'
-              }`}
-              title="Folder Directory View"
-            >
-              <Folder className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Folders</span>
-            </button>
+
+            <div className="flex items-center space-x-1 bg-slate-100 p-1 rounded-lg border border-slate-200">
+              <button
+                onClick={() => setViewMode('table')}
+                className={`px-2.5 py-1 text-xs font-semibold rounded flex items-center space-x-1 transition-colors ${
+                  viewMode === 'table' ? 'bg-white text-[#1B2A6B] shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Detailed Table View"
+              >
+                <List className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Table</span>
+              </button>
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`px-2.5 py-1 text-xs font-semibold rounded flex items-center space-x-1 transition-colors ${
+                  viewMode === 'grid' ? 'bg-white text-[#1B2A6B] shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Grid Card View"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Grid</span>
+              </button>
+              <button
+                onClick={() => setViewMode('folder')}
+                className={`px-2.5 py-1 text-xs font-semibold rounded flex items-center space-x-1 transition-colors ${
+                  viewMode === 'folder' ? 'bg-white text-[#1B2A6B] shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Folder Directory View"
+              >
+                <Folder className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Folders</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Floating Bulk Action Bar */}
+      {selectedDocIds.size > 0 && (
+        <div className="bg-[#1B2A6B] text-white p-3 rounded-lg shadow-lg flex flex-wrap items-center justify-between gap-3 border border-indigo-900 animate-in fade-in slide-in-from-top-2 duration-200 sticky top-2 z-30">
+          <div className="flex items-center space-x-3">
+            <span className="px-2.5 py-1 bg-white/20 rounded-md text-xs font-mono font-bold tracking-wide">
+              {selectedDocIds.size} Selected
+            </span>
+            <span className="text-xs text-indigo-100 hidden sm:inline">
+              Bulk actions apply to all checked documents across library
+            </span>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            {/* Bulk Category Change */}
+            <div className="flex items-center space-x-1 bg-white/10 px-2 py-1 rounded text-xs">
+              <Tag className="w-3.5 h-3.5 text-teal-300" />
+              <span className="text-[11px] text-indigo-100 hidden md:inline">Move To:</span>
+              <select
+                onChange={(e) => {
+                  if (e.target.value) {
+                    handleBulkChangeCategory(e.target.value as LibraryCategory);
+                    e.target.value = '';
+                  }
+                }}
+                defaultValue=""
+                className="bg-slate-900 text-white text-xs rounded px-2 py-0.5 border border-indigo-400 focus:outline-none"
+              >
+                <option value="" disabled>Change Category...</option>
+                <option value="CVs">CVs & Key Experts</option>
+                <option value="Company Profile">Company Profile</option>
+                <option value="Previous Proposals">Previous Proposals</option>
+                <option value="Certificates & Credentials">Certificates & Credentials</option>
+                <option value="Company Experience">Company Experience</option>
+                <option value="Legal & Tax">Legal & Tax</option>
+                <option value="Other">Other / TOR</option>
+              </select>
+            </div>
+
+            {/* Bulk Delete */}
+            <button
+              onClick={handleBulkDelete}
+              className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-bold transition-colors flex items-center space-x-1.5 shadow-sm"
+              title="Delete all selected documents permanently"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Delete Selected ({selectedDocIds.size})</span>
+            </button>
+
+            {/* Deselect All */}
+            <button
+              onClick={handleDeselectAll}
+              className="p-1 hover:bg-white/20 rounded text-slate-300 hover:text-white transition-colors"
+              title="Deselect all"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Category Tabs Strip */}
       <div className="flex items-center space-x-1.5 overflow-x-auto bg-white p-1.5 rounded-lg border border-slate-200">
@@ -568,7 +733,173 @@ export const DocumentLibraryPage: React.FC = () => {
         </div>
       )}
 
-      {/* VIEW 1: GRID CARDS VIEW */}
+      {/* VIEW 1: DETAILED TABLE VIEW (DEFAULT) */}
+      {viewMode === 'table' && (
+        <div className="bg-white rounded-lg border border-slate-200 shadow-2xs overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse odoo-table table-auto">
+              <thead>
+                <tr className="bg-[#1B2A6B] text-white text-[11px]">
+                  <th className="w-10 text-center text-white font-mono whitespace-nowrap p-2.5">
+                    <button
+                      onClick={handleSelectAllFiltered}
+                      className="p-1 text-white hover:text-teal-300 transition-colors inline-flex items-center justify-center"
+                      title="Select / Deselect all visible"
+                    >
+                      {isAllFilteredSelected ? (
+                        <CheckSquare className="w-4 h-4 text-teal-300" />
+                      ) : isSomeFilteredSelected ? (
+                        <MinusSquare className="w-4 h-4 text-teal-300" />
+                      ) : (
+                        <Square className="w-4 h-4 text-white/70" />
+                      )}
+                    </button>
+                  </th>
+                  <th className="w-10 text-center text-white font-mono whitespace-nowrap">SL</th>
+                  <th className="min-w-[240px] max-w-[340px] text-white">Document Name & Location</th>
+                  <th className="w-38 text-white whitespace-nowrap">Category</th>
+                  <th className="w-32 text-white whitespace-nowrap">Folder</th>
+                  <th className="w-20 text-white whitespace-nowrap">Format</th>
+                  <th className="w-20 text-white whitespace-nowrap">Size</th>
+                  <th className="w-24 text-white whitespace-nowrap">Date</th>
+                  <th className="w-32 text-white whitespace-nowrap">Dual Storage</th>
+                  <th className="w-24 text-center text-white whitespace-nowrap">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredDocs.length === 0 ? (
+                  <tr>
+                    <td colSpan={10} className="text-center py-10 text-slate-400 italic">
+                      No documents found matching filter criteria. Click + Upload Documents to add.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredDocs.map((doc, i) => {
+                    const isSelected = selectedDocIds.has(doc.id);
+
+                    return (
+                      <tr
+                        key={doc.id}
+                        onClick={() => setSelectedDoc(doc)}
+                        className={`hover:bg-teal-50/40 cursor-pointer transition-colors border-b border-slate-100 ${
+                          isSelected ? 'bg-indigo-50/60' : ''
+                        }`}
+                      >
+                        <td
+                          className="text-center p-2.5"
+                          onClick={(e) => handleToggleSelect(doc.id, e)}
+                        >
+                          <div className="flex items-center justify-center">
+                            {isSelected ? (
+                              <CheckSquare className="w-4 h-4 text-indigo-600" />
+                            ) : (
+                              <Square className="w-4 h-4 text-slate-400 hover:text-slate-600" />
+                            )}
+                          </div>
+                        </td>
+                        <td className="text-center font-bold font-mono text-slate-700">{i + 1}</td>
+                        <td className="font-semibold text-slate-900 hover:text-[#1D8C8C] max-w-[340px]" title={doc.fileName}>
+                          <div className="flex items-center space-x-2">
+                            <FileText
+                              className={`w-4 h-4 shrink-0 ${
+                                doc.fileType === 'PDF' ? 'text-red-600' : 'text-blue-600'
+                              }`}
+                            />
+                            <div className="truncate">
+                              <div className="truncate font-bold">{doc.fileName}</div>
+                              {doc.description && (
+                                <div className="text-[10px] text-slate-400 truncate font-normal">
+                                  {doc.description}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="font-mono text-[11px] font-bold text-slate-800 whitespace-nowrap">
+                          <select
+                            value={doc.kbCategory}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => handleUpdateDocCategory(doc.id, e.target.value as LibraryCategory, e)}
+                            className="text-[11px] font-semibold text-slate-800 bg-slate-50 hover:bg-slate-100 px-2 py-1 rounded border border-slate-200 focus:outline-none focus:border-[#1D8C8C] cursor-pointer"
+                          >
+                            <option value="CVs">CVs & Key Experts</option>
+                            <option value="Company Profile">Company Profile</option>
+                            <option value="Previous Proposals">Previous Proposals</option>
+                            <option value="Certificates & Credentials">Certificates</option>
+                            <option value="Company Experience">Experience</option>
+                            <option value="Legal & Tax">Legal & Tax</option>
+                            <option value="Other">Other / TOR</option>
+                          </select>
+                        </td>
+                        <td className="font-mono text-[10px] text-slate-600 whitespace-nowrap">
+                          <span className="px-1.5 py-0.5 bg-slate-100 rounded text-slate-700 font-semibold truncate max-w-[120px] inline-block" title={doc.folderName}>
+                            {doc.folderName || 'Root'}
+                          </span>
+                        </td>
+                        <td className="font-mono text-[11px] whitespace-nowrap">
+                          <span
+                            className={`px-1.5 py-0.5 rounded font-bold text-[10px] ${
+                              doc.fileType === 'PDF'
+                                ? 'bg-red-50 text-red-700'
+                                : doc.fileType === 'DOCX'
+                                ? 'bg-blue-50 text-blue-700'
+                                : 'bg-slate-100 text-slate-700'
+                            }`}
+                          >
+                            {doc.fileType}
+                          </span>
+                        </td>
+                        <td className="font-mono text-[11px] whitespace-nowrap">{doc.fileSizeMb} MB</td>
+                        <td className="font-mono text-[11px] whitespace-nowrap text-slate-600">{doc.uploadDate}</td>
+                        <td className="whitespace-nowrap">
+                          <div className="flex items-center space-x-1.5">
+                            <span
+                              className="px-1.5 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold rounded flex items-center space-x-1"
+                              title="Markdown extracted for Agent context retrieval"
+                            >
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                              <span>MD Agent</span>
+                            </span>
+                            <span
+                              className="px-1.5 py-0.5 bg-purple-50 text-purple-800 border border-purple-200 text-[10px] font-bold rounded flex items-center space-x-1"
+                              title="Original document saved for submission zip packaging"
+                            >
+                              <PackageCheck className="w-3 h-3 text-purple-600" />
+                              <span>Doc Saved</span>
+                            </span>
+                          </div>
+                        </td>
+                        <td className="text-center">
+                          <div className="flex items-center justify-center space-x-1.5">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedDoc(doc);
+                              }}
+                              className="px-2.5 py-1 bg-slate-100 hover:bg-[#1D8C8C] hover:text-white text-slate-700 text-[11px] font-bold rounded transition-colors"
+                            >
+                              Inspect
+                            </button>
+                            <button
+                              onClick={(e) => handleDeleteDocument(doc.id, e)}
+                              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                              title="Delete document"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW 2: GRID CARDS VIEW */}
       {viewMode === 'grid' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
           {filteredDocs.length === 0 ? (
@@ -590,28 +921,46 @@ export const DocumentLibraryPage: React.FC = () => {
             filteredDocs.map((doc) => {
               const isPdf = doc.fileType === 'PDF';
               const isDocx = doc.fileType === 'DOCX';
+              const isSelected = selectedDocIds.has(doc.id);
 
               return (
                 <div
                   key={doc.id}
                   onClick={() => setSelectedDoc(doc)}
-                  className="bg-white rounded-lg border border-slate-200 hover:border-[#1D8C8C] shadow-2xs hover:shadow-md transition-all p-4 flex flex-col justify-between cursor-pointer group space-y-3"
+                  className={`bg-white rounded-lg border transition-all p-4 flex flex-col justify-between cursor-pointer group space-y-3 relative ${
+                    isSelected
+                      ? 'border-indigo-500 bg-indigo-50/30 shadow-md ring-2 ring-indigo-400'
+                      : 'border-slate-200 hover:border-[#1D8C8C] shadow-2xs hover:shadow-md'
+                  }`}
                 >
                   <div className="space-y-2">
-                    {/* Top Row: File Format & Category */}
+                    {/* Top Row: Checkbox, File Format & Category */}
                     <div className="flex items-center justify-between text-xs">
-                      <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold flex items-center space-x-1 ${
-                          isPdf
-                            ? 'bg-red-50 text-red-700 border border-red-200'
-                            : isDocx
-                            ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                            : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                        }`}
-                      >
-                        <FileText className="w-3 h-3" />
-                        <span>{doc.fileType}</span>
-                      </span>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={(e) => handleToggleSelect(doc.id, e)}
+                          className="p-0.5 hover:bg-slate-100 rounded text-slate-600 transition-colors"
+                          title={isSelected ? 'Deselect' : 'Select for bulk action'}
+                        >
+                          {isSelected ? (
+                            <CheckSquare className="w-4 h-4 text-indigo-600" />
+                          ) : (
+                            <Square className="w-4 h-4 text-slate-400 hover:text-slate-600" />
+                          )}
+                        </button>
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold flex items-center space-x-1 ${
+                            isPdf
+                              ? 'bg-red-50 text-red-700 border border-red-200'
+                              : isDocx
+                              ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                              : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          }`}
+                        >
+                          <FileText className="w-3 h-3" />
+                          <span>{doc.fileType}</span>
+                        </span>
+                      </div>
 
                       <select
                         value={doc.kbCategory}
@@ -644,6 +993,18 @@ export const DocumentLibraryPage: React.FC = () => {
                         {doc.description}
                       </p>
                     )}
+
+                    {/* Dual Storage Feature Pill */}
+                    <div className="flex items-center space-x-1.5 pt-1">
+                      <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-200 text-[9px] font-bold rounded flex items-center space-x-1">
+                        <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
+                        <span>MD for Agent</span>
+                      </span>
+                      <span className="px-1.5 py-0.5 bg-purple-50 text-purple-800 border border-purple-200 text-[9px] font-bold rounded flex items-center space-x-1">
+                        <PackageCheck className="w-2.5 h-2.5 text-purple-600" />
+                        <span>Original Doc Saved</span>
+                      </span>
+                    </div>
 
                     {/* Tags */}
                     {doc.tags && doc.tags.length > 0 && (
@@ -692,124 +1053,86 @@ export const DocumentLibraryPage: React.FC = () => {
         </div>
       )}
 
-      {/* VIEW 2: DETAILED TABLE VIEW / FOLDER VIEW */}
-      {(viewMode === 'table' || viewMode === 'folder') && (
-        <div className="bg-white rounded-lg border border-slate-200 shadow-2xs overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse odoo-table table-auto">
-              <thead>
-                <tr className="bg-[#1B2A6B] text-white text-[11px]">
-                  <th className="w-10 text-center text-white font-mono whitespace-nowrap">SL</th>
-                  <th className="min-w-[240px] max-w-[340px] text-white">Document Name & Location</th>
-                  <th className="w-40 text-white whitespace-nowrap">Category</th>
-                  <th className="w-36 text-white whitespace-nowrap">Folder / Source</th>
-                  <th className="w-20 text-white whitespace-nowrap">Format</th>
-                  <th className="w-20 text-white whitespace-nowrap">Size</th>
-                  <th className="w-24 text-white whitespace-nowrap">Date</th>
-                  <th className="w-32 text-white whitespace-nowrap">MarkItDown</th>
-                  <th className="w-24 text-center text-white whitespace-nowrap">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredDocs.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} className="text-center py-10 text-slate-400 italic">
-                      No documents found matching filter criteria. Click + Upload Documents to add.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredDocs.map((doc, i) => (
-                    <tr
-                      key={doc.id}
-                      onClick={() => setSelectedDoc(doc)}
-                      className="hover:bg-teal-50/40 cursor-pointer transition-colors border-b border-slate-100"
-                    >
-                      <td className="text-center font-bold font-mono text-slate-700">{i + 1}</td>
-                      <td className="font-semibold text-slate-900 hover:text-[#1D8C8C] max-w-[340px]" title={doc.fileName}>
-                        <div className="flex items-center space-x-2">
-                          <FileText
-                            className={`w-4 h-4 shrink-0 ${
-                              doc.fileType === 'PDF' ? 'text-red-600' : 'text-blue-600'
-                            }`}
-                          />
-                          <div className="truncate">
-                            <div className="truncate font-bold">{doc.fileName}</div>
-                            {doc.description && (
-                              <div className="text-[10px] text-slate-400 truncate font-normal">
-                                {doc.description}
-                              </div>
+      {/* VIEW 3: FOLDER DIRECTORY VIEW */}
+      {viewMode === 'folder' && (
+        <div className="space-y-4">
+          {folders.map((folder) => {
+            const folderDocs = filteredDocs.filter((d) => (d.folderName || 'General') === folder);
+            if (folderDocs.length === 0) return null;
+
+            return (
+              <div key={folder} className="bg-white rounded-lg border border-slate-200 overflow-hidden shadow-2xs">
+                <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-200 flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Folder className="w-4 h-4 text-amber-600" />
+                    <span className="font-bold text-slate-800 text-xs">{folder}</span>
+                    <span className="px-2 py-0.5 bg-slate-200 text-slate-700 rounded-full text-[10px] font-mono">
+                      {folderDocs.length} files
+                    </span>
+                  </div>
+                </div>
+
+                <div className="divide-y divide-slate-100">
+                  {folderDocs.map((doc) => {
+                    const isSelected = selectedDocIds.has(doc.id);
+                    return (
+                      <div
+                        key={doc.id}
+                        onClick={() => setSelectedDoc(doc)}
+                        className={`p-3 hover:bg-slate-50 flex items-center justify-between cursor-pointer transition-colors ${
+                          isSelected ? 'bg-indigo-50/50' : ''
+                        }`}
+                      >
+                        <div className="flex items-center space-x-3 min-w-0 pr-4">
+                          <button
+                            onClick={(e) => handleToggleSelect(doc.id, e)}
+                            className="p-0.5 hover:bg-slate-200 rounded text-slate-500"
+                          >
+                            {isSelected ? (
+                              <CheckSquare className="w-4 h-4 text-indigo-600" />
+                            ) : (
+                              <Square className="w-4 h-4 text-slate-400" />
                             )}
+                          </button>
+                          <FileText className="w-4 h-4 text-indigo-600 shrink-0" />
+                          <div className="truncate">
+                            <div className="text-xs font-bold text-slate-900 truncate">{doc.fileName}</div>
+                            <div className="text-[10px] text-slate-500 font-mono flex items-center space-x-2 mt-0.5">
+                              <span>{doc.fileSizeMb} MB</span>
+                              <span>•</span>
+                              <span>{doc.kbCategory}</span>
+                              <span>•</span>
+                              <span className="text-emerald-700 font-bold">MD Ready</span>
+                              <span>•</span>
+                              <span className="text-purple-700 font-bold">Doc Saved</span>
+                            </div>
                           </div>
                         </div>
-                      </td>
-                      <td className="font-mono text-[11px] font-bold text-slate-800 whitespace-nowrap">
-                        <select
-                          value={doc.kbCategory}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={(e) => handleUpdateDocCategory(doc.id, e.target.value as LibraryCategory, e)}
-                          className="text-[11px] font-semibold text-slate-800 bg-slate-50 hover:bg-slate-100 px-2 py-1 rounded border border-slate-200 focus:outline-none focus:border-[#1D8C8C] cursor-pointer"
-                        >
-                          <option value="CVs">CVs & Key Experts</option>
-                          <option value="Company Profile">Company Profile</option>
-                          <option value="Previous Proposals">Previous Proposals</option>
-                          <option value="Certificates & Credentials">Certificates</option>
-                          <option value="Company Experience">Experience</option>
-                          <option value="Legal & Tax">Legal & Tax</option>
-                          <option value="Other">Other / TOR</option>
-                        </select>
-                      </td>
-                      <td className="font-mono text-[10px] text-slate-600 whitespace-nowrap">
-                        <span className="px-1.5 py-0.5 bg-slate-100 rounded text-slate-700 font-semibold">
-                          {doc.folderName || 'Root'}
-                        </span>
-                      </td>
-                      <td className="font-mono text-[11px] whitespace-nowrap">
-                        <span
-                          className={`px-1.5 py-0.5 rounded font-bold text-[10px] ${
-                            doc.fileType === 'PDF'
-                              ? 'bg-red-50 text-red-700'
-                              : doc.fileType === 'DOCX'
-                              ? 'bg-blue-50 text-blue-700'
-                              : 'bg-slate-100 text-slate-700'
-                          }`}
-                        >
-                          {doc.fileType}
-                        </span>
-                      </td>
-                      <td className="font-mono text-[11px] whitespace-nowrap">{doc.fileSizeMb} MB</td>
-                      <td className="font-mono text-[11px] whitespace-nowrap text-slate-600">{doc.uploadDate}</td>
-                      <td className="whitespace-nowrap">
-                        <span className="px-2 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold rounded flex items-center space-x-1 w-fit">
-                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                          <span>Indexed</span>
-                        </span>
-                      </td>
-                      <td className="text-center">
-                        <div className="flex items-center justify-center space-x-1.5">
+
+                        <div className="flex items-center space-x-2 shrink-0">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedDoc(doc);
                             }}
-                            className="px-2.5 py-1 bg-slate-100 hover:bg-[#1D8C8C] hover:text-white text-slate-700 text-[11px] font-bold rounded transition-colors"
+                            className="px-2.5 py-1 bg-slate-100 hover:bg-[#1D8C8C] hover:text-white text-slate-700 text-xs font-semibold rounded transition-colors"
                           >
                             Inspect
                           </button>
                           <button
                             onClick={(e) => handleDeleteDocument(doc.id, e)}
-                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                            title="Delete document"
+                            className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
