@@ -53,14 +53,14 @@ export const DocumentLibraryPage: React.FC = () => {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed)) {
           return DocumentStorageService.deduplicateDocuments(parsed);
         }
       }
     } catch (e) {
       console.warn('Failed to parse stored document library from localStorage:', e);
     }
-    return DocumentStorageService.deduplicateDocuments(REAL_TEST_DATA_DOCUMENTS);
+    return [];
   });
 
   const [selectedCategory, setSelectedCategory] = useState<LibraryCategory>('ALL');
@@ -79,11 +79,8 @@ export const DocumentLibraryPage: React.FC = () => {
     const loadFromIndexedDB = async () => {
       try {
         const idbDocs = await DocumentStorageService.loadLibraryDocuments();
-        if (Array.isArray(idbDocs) && idbDocs.length > 0) {
+        if (Array.isArray(idbDocs)) {
           setDocuments(DocumentStorageService.deduplicateDocuments(idbDocs));
-        } else {
-          // Initialize IndexedDB with default test data
-          await DocumentStorageService.saveLibraryDocuments(REAL_TEST_DATA_DOCUMENTS);
         }
       } catch (err) {
         console.warn('Could not load from IndexedDB, using in-memory state:', err);
@@ -147,6 +144,15 @@ export const DocumentLibraryPage: React.FC = () => {
     setDocuments(cleaned);
     setDuplicateNotice(diff > 0 ? `Cleaned ${diff} duplicate document(s).` : 'No duplicates found.');
     setTimeout(() => setDuplicateNotice(null), 4000);
+  };
+
+  const handleClearAllDocuments = async () => {
+    if (window.confirm('Are you sure you want to clear ALL documents from the library? You will start from zero.')) {
+      setDocuments([]);
+      await DocumentStorageService.clearAllLibraryDocuments();
+      localStorage.removeItem(STORAGE_KEY);
+      setSelectedDoc(null);
+    }
   };
 
   const filteredDocs = documents.filter((doc) => {
@@ -329,9 +335,18 @@ export const DocumentLibraryPage: React.FC = () => {
             </button>
 
             <button
+              onClick={handleClearAllDocuments}
+              className="px-3 py-1.5 text-red-700 hover:text-red-900 bg-red-50 hover:bg-red-100 border border-red-200 rounded text-xs font-semibold transition-colors flex items-center space-x-1.5"
+              title="Clear all documents to start from zero"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-red-600" />
+              <span>Clear All (Start Fresh)</span>
+            </button>
+
+            <button
               onClick={handleResetToTestData}
               className="px-3 py-1.5 text-slate-700 hover:text-[#1B2A6B] bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded text-xs font-semibold transition-colors flex items-center space-x-1.5"
-              title="Reload all default test_data documents"
+              title="Reload sample test_data documents"
             >
               <HardDrive className="w-3.5 h-3.5 text-[#1D8C8C]" />
               <span>Reload test_data</span>

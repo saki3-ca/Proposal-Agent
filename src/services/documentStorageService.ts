@@ -147,6 +147,23 @@ export class DocumentStorageService {
   }
 
   /**
+   * Clear all library documents from IndexedDB
+   */
+  static async clearAllLibraryDocuments(): Promise<void> {
+    try {
+      const db = await this.getDB();
+      const tx = db.transaction(STORE_LIBRARY_DOCS, 'readwrite');
+      tx.objectStore(STORE_LIBRARY_DOCS).clear();
+      return new Promise((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+    } catch (e) {
+      console.error('[DocumentStorageService] Error clearing library documents:', e);
+    }
+  }
+
+  /**
    * Delete a single document from IndexedDB
    */
   static async deleteLibraryDocument(docId: string): Promise<void> {
