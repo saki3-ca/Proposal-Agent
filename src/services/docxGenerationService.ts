@@ -749,7 +749,7 @@ export class DocxGenerationService {
                 new Paragraph({
                   alignment: AlignmentType.CENTER,
                   spacing: { after: 50, line: 240 },
-                  children: [new TextRun({ text: 'CONTACT INFO:', font: primaryFont, size: 18, bold: true, color: '777777' })]
+                  children: [new TextRun({ text: 'Primary Contact', font: primaryFont, size: 18, bold: true, color: '777777' })]
                 }),
                 new Paragraph({
                   alignment: AlignmentType.CENTER,
@@ -769,12 +769,12 @@ export class DocxGenerationService {
                 new Paragraph({
                   alignment: AlignmentType.CENTER,
                   spacing: { after: 30, line: 240 },
-                  children: [new TextRun({ text: 'Email: mamun@acnabin-bd.com', font: primaryFont, size: 16, color: '444444' })]
+                  children: [new TextRun({ text: 'mamun.abdullah@acnabin-bd.com', font: primaryFont, size: 16, color: '444444' })]
                 }),
                 new Paragraph({
                   alignment: AlignmentType.CENTER,
                   spacing: { after: 0, line: 240 },
-                  children: [new TextRun({ text: 'Phone: +880-1711-000000', font: primaryFont, size: 16, color: '444444' })]
+                  children: [new TextRun({ text: '+8801915561888', font: primaryFont, size: 16, color: '444444' })]
                 })
               ]
             }),
@@ -814,7 +814,7 @@ export class DocxGenerationService {
                 new Paragraph({
                   alignment: AlignmentType.CENTER,
                   spacing: { after: 50, line: 240 },
-                  children: [new TextRun({ text: 'SECONDARY CONTACT:', font: primaryFont, size: 18, bold: true, color: '777777' })]
+                  children: [new TextRun({ text: 'Secondary Contact', font: primaryFont, size: 18, bold: true, color: '777777' })]
                 }),
                 new Paragraph({
                   alignment: AlignmentType.CENTER,
@@ -834,12 +834,12 @@ export class DocxGenerationService {
                 new Paragraph({
                   alignment: AlignmentType.CENTER,
                   spacing: { after: 30, line: 240 },
-                  children: [new TextRun({ text: 'Email: mostakin@acnabin-bd.com', font: primaryFont, size: 16, color: '444444' })]
+                  children: [new TextRun({ text: 'mostakin@acnabin-bd.com', font: primaryFont, size: 16, color: '444444' })]
                 }),
                 new Paragraph({
                   alignment: AlignmentType.CENTER,
                   spacing: { after: 0, line: 240 },
-                  children: [new TextRun({ text: 'Phone: +880-1712-000000', font: primaryFont, size: 16, color: '444444' })]
+                  children: [new TextRun({ text: '+8801820584481', font: primaryFont, size: 16, color: '444444' })]
                 })
               ]
             })

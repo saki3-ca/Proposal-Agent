@@ -589,8 +589,8 @@ Generate the structured proposal blocks now as JSON array.`;
         { id: `blk_c3_${Date.now()}`, type: 'PARAGRAPH', order: 3, content: submittedToBlock, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
         { id: `blk_c4_${Date.now()}`, type: 'PARAGRAPH', order: 4, content: `Submitted by:\nACNABIN, Chartered Accountants\nAn Independent Member Firm of Baker Tilly International\nBDBL Bhaban (Level-13 & 15), 12 Kawran Bazar Commercial Area, Dhaka-1215`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
         { id: `blk_c5_${Date.now()}`, type: 'HEADING', order: 5, content: 'Contact Info', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_c6_${Date.now()}`, type: 'PARAGRAPH', order: 6, content: `Primary Contact:\nMuhammad Aminul Hoque, FCA\nPartner & Head of Audit & Assurance\nACNABIN, Chartered Accountants\nEmail: aminul.hoque@acnabin-bd.com | Phone: +880-2-8189428`, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_c7_${Date.now()}`, type: 'PARAGRAPH', order: 7, content: `Secondary Contact:\nMd. Rokonuzzaman, FCA\nPartner & Head of Risk Advisory\nACNABIN, Chartered Accountants\nEmail: rokonuzzaman@acnabin-bd.com | Phone: +880-2-8189428`, confidence: 1.0, reviewStatus: 'AI_GENERATED' }
+        { id: `blk_c6_${Date.now()}`, type: 'PARAGRAPH', order: 6, content: `Primary Contact:\nAbdullah-Al-Mamun, FCA\nDirector, Audit & Consultancy\nACNABIN, Chartered Accountants\nmamun.abdullah@acnabin-bd.com\n+8801915561888`, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_c7_${Date.now()}`, type: 'PARAGRAPH', order: 7, content: `Secondary Contact:\nMd. Shif All Mostakin\nAssistant Director, Audit & Consultancy\nACNABIN, Chartered Accountants\nmostakin@acnabin-bd.com\n+8801820584481`, confidence: 1.0, reviewStatus: 'AI_GENERATED' }
       );
       return blocks;
     }
@@ -1213,11 +1213,11 @@ Generate the structured proposal blocks now as JSON array.`;
 
           let text = b.content;
           // Partner contact info
-          text = text.replace(/\[Partner\/Director Name, FCA\]\s*—\s*TO BE PROVIDED/g, 'Muhammad Aminul Hoque, FCA');
-          text = text.replace(/\[Name\]\s*—\s*TO BE PROVIDED/g, 'Md. Rokonuzzaman, FCA');
-          text = text.replace(/Designation\s*—\s*TO BE PROVIDED/g, 'Partner, Audit & Assurance');
-          text = text.replace(/Email:\s*\[TO BE PROVIDED\]/g, 'Email: aminul.hoque@acnabin-bd.com');
-          text = text.replace(/Phone:\s*\[TO BE PROVIDED\]/g, 'Phone: +880-2-8189428');
+          text = text.replace(/\[Partner\/Director Name, FCA\]\s*—\s*TO BE PROVIDED/g, 'Abdullah-Al-Mamun, FCA');
+          text = text.replace(/\[Name\]\s*—\s*TO BE PROVIDED/g, 'Md. Shif All Mostakin');
+          text = text.replace(/Designation\s*—\s*TO BE PROVIDED/g, 'Director, Audit & Consultancy');
+          text = text.replace(/Email:\s*\[TO BE PROVIDED\]/g, 'Email: mamun.abdullah@acnabin-bd.com');
+          text = text.replace(/Phone:\s*\[TO BE PROVIDED\]/g, 'Phone: +8801915561888');
 
           // Signatories
           text = text.replace(/\[Partner Name, FCA\]\s*—\s*TO BE PROVIDED/g, 'Muhammad Aminul Hoque, FCA');
