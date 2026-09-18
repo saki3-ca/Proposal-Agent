@@ -2,18 +2,37 @@ import os
 import re
 import time
 from typing import Dict, Any, List, Optional
-import numpy as np
-from PIL import Image
-import pypdfium2 as pdfium
-from rapidocr_onnxruntime import RapidOCR
+try:
+    import numpy as np
+except ImportError:
+    np = None
+
+try:
+    from PIL import Image
+except ImportError:
+    Image = None
+
+try:
+    import pypdfium2 as pdfium
+except ImportError:
+    pdfium = None
+
+try:
+    from rapidocr_onnxruntime import RapidOCR
+except ImportError:
+    RapidOCR = None
 
 class OcrEngine:
-    _instance: Optional[RapidOCR] = None
+    _instance: Any = None
 
     @classmethod
-    def get_ocr_instance(cls) -> RapidOCR:
-        if cls._instance is None:
-            cls._instance = RapidOCR()
+    def get_ocr_instance(cls) -> Any:
+        if cls._instance is None and RapidOCR is not None:
+            try:
+                cls._instance = RapidOCR()
+            except Exception as e:
+                print(f"Could not instantiate RapidOCR: {e}")
+                cls._instance = None
         return cls._instance
 
     @classmethod

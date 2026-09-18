@@ -2,13 +2,23 @@ import os
 import tempfile
 import time
 from typing import Dict, Any
-from markitdown import MarkItDown
+try:
+    from markitdown import MarkItDown
+except ImportError:
+    MarkItDown = None
 from backend.services.extraction_quality import ExtractionQualityChecker
 from backend.services.ocr_engine import OcrEngine
 
 class DocumentProcessor:
     def __init__(self):
-        self.md_converter = MarkItDown()
+        if MarkItDown is not None:
+            try:
+                self.md_converter = MarkItDown()
+            except Exception as e:
+                print(f"Could not instantiate MarkItDown: {e}")
+                self.md_converter = None
+        else:
+            self.md_converter = None
 
     def process_file(self, file_bytes: bytes, filename: str) -> Dict[str, Any]:
         """
