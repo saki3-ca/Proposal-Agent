@@ -249,7 +249,7 @@ export const ProjectList: React.FC<ProjectListProps> = ({ projects, onSelectProj
               {activeProjects.length === 0 ? (
                 <tr>
                   <td colSpan={11} className="text-center py-8 text-slate-500 italic">
-                    No active proposals matching search filter criteria. Click New Proposal Project to add.
+                    No active proposals matching search filter criteria. Click "New Proposal Project" to add.
                   </td>
                 </tr>
               ) : (

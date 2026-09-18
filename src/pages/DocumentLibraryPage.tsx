@@ -770,7 +770,7 @@ export const DocumentLibraryPage: React.FC = () => {
                 {filteredDocs.length === 0 ? (
                   <tr>
                     <td colSpan={10} className="text-center py-10 text-slate-400 italic">
-                      No documents found matching filter criteria. Click + Upload Documents to add.
+                      No documents found matching filter criteria. Click "Upload Documents" to add.
                     </td>
                   </tr>
                 ) : (
