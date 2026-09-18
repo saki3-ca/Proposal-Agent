@@ -44,6 +44,7 @@ export type LibraryCategory =
 export type UploadCategorySelection = 'AUTO' | LibraryCategory;
 
 import { DocumentStorageService } from '../services/documentStorageService';
+import { SupabaseStorageService } from '../services/supabaseStorageService';
 
 const STORAGE_KEY = 'acnabin_document_library_docs';
 
@@ -235,6 +236,22 @@ export const DocumentLibraryPage: React.FC = () => {
           ? 'Sample_Proposals'
           : 'TOR & RFP Documents';
 
+      // Upload raw file to Supabase Storage
+      const uploadRes = await SupabaseStorageService.uploadRawFile(file, file.name, folderName);
+
+      // Convert file to base64 data URL for permanent offline IndexedDB viewing
+      let rawBase64 = '';
+      try {
+        rawBase64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => resolve('');
+          reader.readAsDataURL(file);
+        });
+      } catch (e) {
+        console.warn('Could not encode file to base64:', e);
+      }
+
       const newDoc: LibraryDocumentItem = {
         id: `kb-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
         fileName: file.name,
@@ -247,7 +264,7 @@ export const DocumentLibraryPage: React.FC = () => {
         ocrCompleted: true,
         isSearchable: true,
         pageCount: Math.max(1, Math.ceil(mdContent.split('\n\n').length / 3)),
-        sourcePath: URL.createObjectURL(file),
+        sourcePath: uploadRes.url || URL.createObjectURL(file),
         sourceFileRelativePath: `test_data/${folderName}/${file.name}`,
         folderName: folderName,
         aiConfidence: Math.max(score, classification.confidence),
@@ -255,8 +272,13 @@ export const DocumentLibraryPage: React.FC = () => {
         kbCategory: determinedCategory,
         tags: Array.from(new Set([...classification.detectedTags, determinedCategory, ext])),
         description: classification.reason || `Uploaded document for proposal knowledge base.`,
-        markdownContent: mdContent
+        markdownContent: mdContent,
+        rawFileBase64: rawBase64,
+        rawFile: file
       };
+
+      // Sync metadata record to Supabase DB
+      SupabaseStorageService.saveDocumentRecord(newDoc);
 
       newDocsToAdd.push(newDoc);
     }

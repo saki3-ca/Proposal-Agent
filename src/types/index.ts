@@ -102,6 +102,7 @@ export interface ProjectDocument {
   aiConfidence: number;
   version: string;
   rawFile?: any;
+  rawFileBase64?: string;
 }
 
 export type RequirementCategory =

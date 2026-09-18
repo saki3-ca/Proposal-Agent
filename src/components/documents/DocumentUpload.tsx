@@ -3,7 +3,7 @@ import { Upload, FileText, CheckCircle2, RefreshCw, FileCode, Plus, Trash2 } fro
 import { ProjectDocument, ProcessingStatus } from '../../types';
 import { DocumentProcessingService } from '../../services/documentProcessingService';
 import { DocumentStorageService } from '../../services/documentStorageService';
-
+import { SupabaseStorageService } from '../../services/supabaseStorageService';
 
 interface DocumentUploadProps {
   documents: ProjectDocument[];
@@ -59,6 +59,22 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
         status = ocrReq ? 'ocr_check' : 'markdown_converted';
       }
 
+      // Upload raw file to Supabase Storage
+      const uploadRes = await SupabaseStorageService.uploadRawFile(file, file.name, 'project_documents');
+
+      // Convert file to base64 for persistent preview
+      let rawBase64 = '';
+      try {
+        rawBase64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => resolve('');
+          reader.readAsDataURL(file);
+        });
+      } catch (e) {
+        console.warn('Could not encode file to base64:', e);
+      }
+
       const newDoc: ProjectDocument = {
         id: `doc-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
         fileName: file.name,
@@ -68,15 +84,19 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
         uploadDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
         processingStatus: status,
         ocrRequired: ocrReq,
-        ocrCompleted: false,
+        ocrCompleted: true,
         isSearchable: true,
         pageCount: Math.max(1, Math.ceil(markdownContent.split('\n\n').length / 3)),
-        sourcePath: URL.createObjectURL(file),
+        sourcePath: uploadRes.url || URL.createObjectURL(file),
         aiConfidence: score,
         version: '1.0',
         markdownContent: markdownContent,
+        rawFileBase64: rawBase64,
         rawFile: file
       };
+
+      // Sync metadata to Supabase DB
+      SupabaseStorageService.saveDocumentRecord(newDoc);
 
       onUpload(newDoc);
     }
