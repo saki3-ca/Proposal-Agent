@@ -13,6 +13,7 @@ interface SidebarProps {
   onNavigate: (path: string) => void;
   collapsed: boolean;
   onToggleCollapse: () => void;
+  activeProjectsCount?: number;
 }
 
 interface NavItem {
@@ -27,14 +28,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
   currentPath,
   onNavigate,
   collapsed,
-  onToggleCollapse
+  onToggleCollapse,
+  activeProjectsCount
 }) => {
   const sections: { title: string; items: NavItem[] }[] = [
     {
       title: 'WORK',
       items: [
         { path: '/', label: 'Dashboard', icon: LayoutDashboard },
-        { path: '/projects', label: 'Active Projects', icon: Briefcase, badge: '4' }
+        {
+          path: '/projects',
+          label: 'Active Projects',
+          icon: Briefcase,
+          badge: activeProjectsCount !== undefined && activeProjectsCount > 0 ? String(activeProjectsCount) : undefined
+        }
       ]
     },
     {

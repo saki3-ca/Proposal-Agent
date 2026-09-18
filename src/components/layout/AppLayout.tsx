@@ -7,6 +7,7 @@ interface AppLayoutProps {
   currentPath: string;
   onNavigate: (path: string) => void;
   activeProjectName?: string;
+  activeProjectsCount?: number;
   currentUser: User | null;
   onLogout: () => void;
   onQuickAnalyzeTor?: () => void;
@@ -18,6 +19,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   currentPath,
   onNavigate,
   activeProjectName,
+  activeProjectsCount,
   currentUser,
   onLogout,
   onQuickAnalyzeTor,
@@ -34,6 +36,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
         onNavigate={onNavigate}
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+        activeProjectsCount={activeProjectsCount}
       />
 
       {/* Main Content Area */}

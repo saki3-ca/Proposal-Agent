@@ -102,6 +102,7 @@ export function App() {
   }
 
   const selectedProject = projects.find((p) => p.id === selectedProjectId) || projects[0];
+  const activeProjectsCount = projects.filter((p) => p.status !== 'Approved' && p.status !== 'Rejected' && p.status !== 'Submitted').length;
 
   return (
     <>
@@ -109,6 +110,7 @@ export function App() {
         currentPath={currentPath}
         onNavigate={handleNavigate}
         activeProjectName={selectedProjectId ? selectedProject?.name : undefined}
+        activeProjectsCount={activeProjectsCount}
         currentUser={currentUser}
         onLogout={() => setCurrentUser(null)}
         onQuickAnalyzeTor={() => setIsScratchOpen(true)}
