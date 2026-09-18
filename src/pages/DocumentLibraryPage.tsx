@@ -43,6 +43,8 @@ export type LibraryCategory =
 
 export type UploadCategorySelection = 'AUTO' | LibraryCategory;
 
+import { DocumentStorageService } from '../services/documentStorageService';
+
 const STORAGE_KEY = 'acnabin_document_library_docs';
 
 export const DocumentLibraryPage: React.FC = () => {
@@ -51,12 +53,14 @@ export const DocumentLibraryPage: React.FC = () => {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return DocumentStorageService.deduplicateDocuments(parsed);
+        }
       }
     } catch (e) {
-      console.warn('Failed to parse stored document library:', e);
+      console.warn('Failed to parse stored document library from localStorage:', e);
     }
-    return REAL_TEST_DATA_DOCUMENTS;
+    return DocumentStorageService.deduplicateDocuments(REAL_TEST_DATA_DOCUMENTS);
   });
 
   const [selectedCategory, setSelectedCategory] = useState<LibraryCategory>('ALL');
@@ -66,15 +70,40 @@ export const DocumentLibraryPage: React.FC = () => {
   const [uploadCategory, setUploadCategory] = useState<UploadCategorySelection>('AUTO');
   const [viewMode, setViewMode] = useState<'grid' | 'table' | 'folder'>('grid');
   const [selectedFolder, setSelectedFolder] = useState<string>('ALL');
+  const [duplicateNotice, setDuplicateNotice] = useState<string | null>(null);
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
-  // Sync to localStorage on changes
+  // Load from IndexedDB on initial mount for complete unlimited persistence
   useEffect(() => {
+    const loadFromIndexedDB = async () => {
+      try {
+        const idbDocs = await DocumentStorageService.loadLibraryDocuments();
+        if (Array.isArray(idbDocs) && idbDocs.length > 0) {
+          setDocuments(DocumentStorageService.deduplicateDocuments(idbDocs));
+        } else {
+          // Initialize IndexedDB with default test data
+          await DocumentStorageService.saveLibraryDocuments(REAL_TEST_DATA_DOCUMENTS);
+        }
+      } catch (err) {
+        console.warn('Could not load from IndexedDB, using in-memory state:', err);
+      }
+    };
+    loadFromIndexedDB();
+  }, []);
+
+  // Sync to IndexedDB and lightweight localStorage metadata on changes
+  useEffect(() => {
+    DocumentStorageService.saveLibraryDocuments(documents);
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(documents));
+      // Store lightweight version in localStorage (without massive markdown if too large)
+      const lightweight = documents.map((d) => ({
+        ...d,
+        markdownContent: (d.markdownContent || '').slice(0, 500)
+      }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(lightweight));
     } catch (e) {
-      console.warn('Failed to save document library to localStorage:', e);
+      console.warn('LocalStorage quota reached; IndexedDB retains complete document records safely.');
     }
   }, [documents]);
 
@@ -105,10 +134,19 @@ export const DocumentLibraryPage: React.FC = () => {
     const confirmName = docToDelete?.fileName || 'this document';
     if (window.confirm(`Are you sure you want to permanently delete "${confirmName}" from the Document Library?`)) {
       setDocuments((prev) => prev.filter((d) => d.id !== docId));
+      DocumentStorageService.deleteLibraryDocument(docId);
       if (selectedDoc?.id === docId) {
         setSelectedDoc(null);
       }
     }
+  };
+
+  const handleCleanDuplicates = () => {
+    const cleaned = DocumentStorageService.deduplicateDocuments(documents);
+    const diff = documents.length - cleaned.length;
+    setDocuments(cleaned);
+    setDuplicateNotice(diff > 0 ? `Cleaned ${diff} duplicate document(s).` : 'No duplicates found.');
+    setTimeout(() => setDuplicateNotice(null), 4000);
   };
 
   const filteredDocs = documents.filter((doc) => {
@@ -130,7 +168,23 @@ export const DocumentLibraryPage: React.FC = () => {
 
   const handleFileUpload = async (files: FileList | File[]) => {
     setIsUploading(true);
+    let duplicatesSkipped = 0;
+    const newDocsToAdd: LibraryDocumentItem[] = [];
+
     for (const file of Array.from(files)) {
+      const fileSizeMb = parseFloat((file.size / (1024 * 1024)).toFixed(2)) || 0.05;
+
+      // Check for duplicate by both exact filename AND size
+      const isDupe = DocumentStorageService.isDuplicate(
+        { name: file.name, size: file.size },
+        [...newDocsToAdd, ...documents]
+      );
+
+      if (isDupe) {
+        duplicatesSkipped++;
+        continue;
+      }
+
       const ext = file.name.split('.').pop()?.toUpperCase() || 'PDF';
       let fileType: 'PDF' | 'DOCX' | 'XLSX' | 'PPTX' | 'Image' | 'TXT' | 'CSV' = 'PDF';
 
@@ -179,7 +233,7 @@ export const DocumentLibraryPage: React.FC = () => {
         id: `kb-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
         fileName: file.name,
         fileType: fileType,
-        fileSizeMb: parseFloat((file.size / (1024 * 1024)).toFixed(2)) || 0.2,
+        fileSizeMb: fileSizeMb,
         uploadedBy: 'SAKIB (Proposal Manager)',
         uploadDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
         processingStatus: ocrReq ? 'ocr_check' : 'markdown_converted',
@@ -198,14 +252,26 @@ export const DocumentLibraryPage: React.FC = () => {
         markdownContent: mdContent
       };
 
-      setDocuments((prev) => [newDoc, ...prev]);
+      newDocsToAdd.push(newDoc);
     }
+
+    if (newDocsToAdd.length > 0) {
+      setDocuments((prev) => DocumentStorageService.deduplicateDocuments([...newDocsToAdd, ...prev]));
+    }
+
+    if (duplicatesSkipped > 0) {
+      setDuplicateNotice(`Skipped ${duplicatesSkipped} duplicate file(s) (same name & size already exists).`);
+      setTimeout(() => setDuplicateNotice(null), 5000);
+    }
+
     setIsUploading(false);
   };
 
-  const handleResetToTestData = () => {
+  const handleResetToTestData = async () => {
     if (window.confirm('Reset Document Library to load all default test_data repository documents?')) {
-      setDocuments(REAL_TEST_DATA_DOCUMENTS);
+      const resetList = DocumentStorageService.deduplicateDocuments(REAL_TEST_DATA_DOCUMENTS);
+      setDocuments(resetList);
+      await DocumentStorageService.saveLibraryDocuments(resetList);
       setSelectedCategory('ALL');
       setSelectedFolder('ALL');
       setSearchQuery('');
@@ -254,6 +320,15 @@ export const DocumentLibraryPage: React.FC = () => {
 
           <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
             <button
+              onClick={handleCleanDuplicates}
+              className="px-3 py-1.5 text-slate-700 hover:text-indigo-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded text-xs font-semibold transition-colors flex items-center space-x-1.5"
+              title="Scan and clean any duplicate documents"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Clean Duplicates</span>
+            </button>
+
+            <button
               onClick={handleResetToTestData}
               className="px-3 py-1.5 text-slate-700 hover:text-[#1B2A6B] bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded text-xs font-semibold transition-colors flex items-center space-x-1.5"
               title="Reload all default test_data documents"
@@ -287,6 +362,13 @@ export const DocumentLibraryPage: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {duplicateNotice && (
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs font-semibold text-amber-900 flex items-center justify-between">
+            <span>{duplicateNotice}</span>
+            <button onClick={() => setDuplicateNotice(null)} className="text-amber-700 hover:text-amber-900 text-xs underline">Dismiss</button>
+          </div>
+        )}
 
         {/* 4 Compact Stat Badges */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">

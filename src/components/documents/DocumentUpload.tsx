@@ -2,6 +2,8 @@ import React, { useState, useRef } from 'react';
 import { Upload, FileText, CheckCircle2, RefreshCw, FileCode, Plus, Trash2 } from 'lucide-react';
 import { ProjectDocument, ProcessingStatus } from '../../types';
 import { DocumentProcessingService } from '../../services/documentProcessingService';
+import { DocumentStorageService } from '../../services/documentStorageService';
+
 
 interface DocumentUploadProps {
   documents: ProjectDocument[];
@@ -21,6 +23,15 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
 
   const processUploadedFiles = async (files: FileList | File[]) => {
     for (const file of Array.from(files)) {
+      const isDupe = DocumentStorageService.isDuplicate(
+        { name: file.name, size: file.size },
+        documents
+      );
+      if (isDupe) {
+        console.log(`[DocumentUpload] Skipped duplicate file '${file.name}' (${file.size} bytes).`);
+        continue;
+      }
+
       const ext = file.name.split('.').pop()?.toUpperCase() || 'PDF';
       let fileType: 'PDF' | 'DOCX' | 'XLSX' | 'PPTX' | 'Image' | 'TXT' | 'CSV' = 'PDF';
 

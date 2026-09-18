@@ -11,6 +11,7 @@ interface DashboardPageProps {
   onQuickAnalyzeTor: () => void;
   onRefreshProposals: () => void;
   onClearProposals?: () => void;
+  onDeleteProposal?: (projectId: string) => void;
   onOpenProgressModal?: (project: Project) => void;
 }
 
@@ -20,6 +21,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   onNewProposal,
   onQuickAnalyzeTor,
   onClearProposals,
+  onDeleteProposal,
   onOpenProgressModal
 }) => {
   // Filter active proposals
@@ -139,6 +141,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
         onNavigate={onNavigate}
         onNewProposal={onNewProposal}
         onClearProposals={onClearProposals}
+        onDeleteProposal={onDeleteProposal}
         onOpenProgressModal={onOpenProgressModal}
       />
     </div>

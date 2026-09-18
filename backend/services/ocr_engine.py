@@ -17,7 +17,7 @@ class OcrEngine:
         return cls._instance
 
     @classmethod
-    def extract_from_pdf(cls, file_bytes: bytes, scale: float = 1.5) -> Dict[str, Any]:
+    def extract_from_pdf(cls, file_bytes: bytes, scale: float = 1.5, max_pages: Optional[int] = None) -> Dict[str, Any]:
         """
         Renders each PDF page as an image, performs RapidOCR extraction,
         and constructs structured, layout-preserved Markdown text.
@@ -25,7 +25,8 @@ class OcrEngine:
         start_time = time.time()
         ocr = cls.get_ocr_instance()
         pdf = pdfium.PdfDocument(file_bytes)
-        page_count = len(pdf)
+        total_pdf_pages = len(pdf)
+        page_count = min(total_pdf_pages, max_pages) if max_pages else total_pdf_pages
 
         page_markdowns: List[str] = []
         total_chars = 0

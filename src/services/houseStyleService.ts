@@ -24,7 +24,7 @@ export class HouseStyleService {
       document: {
         pageSize: 'A4 (210mm x 297mm)',
         orientation: 'portrait',
-        margins: { top: '0.75 in', bottom: '0.75 in', left: '0.75 in', right: '0.75 in' },
+        margins: { top: '0.75 in', bottom: '0.5 in', left: '0.75 in', right: '0.75 in' },
         headerDistance: '0.5 in',
         footerDistance: '0.5 in',
         sectionBehavior: 'Continuous with H1 Page Breaks'

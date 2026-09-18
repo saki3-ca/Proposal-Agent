@@ -55,7 +55,7 @@ export const ControlBar: React.FC<ControlBarProps> = ({
         <div className="relative">
           <button
             onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-            className="btn-odoo-secondary flex items-center space-x-1 shrink-0"
+            className="btn-secondary flex items-center space-x-1.5 shrink-0 text-xs py-1.5 px-3"
           >
             <Filter className="w-3.5 h-3.5 text-slate-500" />
             <span>Filters</span>
@@ -63,7 +63,7 @@ export const ControlBar: React.FC<ControlBarProps> = ({
           </button>
 
           {showFilterDropdown && filterOptions.length > 0 && (
-            <div className="absolute left-0 mt-1 w-44 bg-white border border-slate-200 rounded-md shadow-lg py-1 z-30">
+            <div className="absolute left-0 mt-1.5 w-48 bg-white border border-slate-200 rounded-lg shadow-xl py-1 z-30 ring-1 ring-slate-900/5">
               {filterOptions.map((opt) => (
                 <button
                   key={opt}
@@ -71,8 +71,8 @@ export const ControlBar: React.FC<ControlBarProps> = ({
                     if (onSelectFilter) onSelectFilter(opt);
                     setShowFilterDropdown(false);
                   }}
-                  className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${
-                    activeFilter === opt ? 'bg-purple-50 text-purple-900 font-bold' : 'text-slate-700 hover:bg-slate-50'
+                  className={`w-full text-left px-3 py-2 text-xs font-medium transition-colors ${
+                    activeFilter === opt ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-700 hover:bg-slate-50'
                   }`}
                 >
                   {opt}
@@ -84,14 +84,14 @@ export const ControlBar: React.FC<ControlBarProps> = ({
 
         <button
           onClick={() => setShowGroupByDropdown(!showGroupByDropdown)}
-          className="btn-odoo-secondary flex items-center space-x-1 shrink-0 hidden md:flex"
+          className="btn-secondary flex items-center space-x-1.5 shrink-0 hidden md:flex text-xs py-1.5 px-3"
         >
           <Layers className="w-3.5 h-3.5 text-slate-500" />
           <span>Group By</span>
           <ChevronDown className="w-3 h-3 text-slate-400" />
         </button>
 
-        <button className="btn-odoo-secondary flex items-center space-x-1 shrink-0 hidden lg:flex">
+        <button className="btn-secondary flex items-center space-x-1.5 shrink-0 hidden lg:flex text-xs py-1.5 px-3">
           <Star className="w-3.5 h-3.5 text-slate-500" />
           <span>Favorites</span>
           <ChevronDown className="w-3 h-3 text-slate-400" />
@@ -107,22 +107,22 @@ export const ControlBar: React.FC<ControlBarProps> = ({
             value={searchValue}
             onChange={handleSearchChange}
             placeholder="Search records..."
-            className="w-full pl-8 pr-3 py-1 bg-slate-50 border border-slate-200 rounded text-xs text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:border-purple-700"
+            className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:border-indigo-500 focus:bg-white transition-all"
           />
         </div>
 
-        {/* Odoo View Mode Switchers */}
-        <div className="flex items-center border border-slate-200 rounded bg-slate-50 p-0.5 shrink-0">
+        {/* View Mode Switchers */}
+        <div className="flex items-center border border-slate-200 rounded-lg bg-slate-50 p-0.5 shrink-0">
           <button
             onClick={() => onViewModeChange && onViewModeChange('list')}
-            className={`p-1 rounded ${viewMode === 'list' ? 'bg-white text-purple-800 shadow-2xs' : 'text-slate-500 hover:text-slate-800'}`}
+            className={`p-1.5 rounded-md transition-all ${viewMode === 'list' ? 'bg-white text-indigo-600 shadow-xs font-bold' : 'text-slate-400 hover:text-slate-700'}`}
             title="List View"
           >
             <List className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={() => onViewModeChange && onViewModeChange('form')}
-            className={`p-1 rounded ${viewMode === 'form' ? 'bg-white text-purple-800 shadow-2xs' : 'text-slate-500 hover:text-slate-800'}`}
+            className={`p-1.5 rounded-md transition-all ${viewMode === 'form' ? 'bg-white text-indigo-600 shadow-xs font-bold' : 'text-slate-400 hover:text-slate-700'}`}
             title="Form View"
           >
             <FileText className="w-3.5 h-3.5" />

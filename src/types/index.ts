@@ -1054,6 +1054,11 @@ export interface ProposalContentBlock {
   type: ContentBlockType;
   order: number;
   content: string;
+  items?: string[];
+  tableData?: {
+    headers?: string[];
+    rows?: string[][];
+  };
   headingLevel?: number;
   evidenceReferences?: string[];
   requirementReferences?: string[];

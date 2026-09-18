@@ -1,11 +1,12 @@
-import requests
 import os
 import tempfile
+from fastapi.testclient import TestClient
+from backend.main import app
 
-BASE_URL = "http://127.0.0.1:8000"
+client = TestClient(app)
 
 def test_health():
-    res = requests.get(f"{BASE_URL}/health")
+    res = client.get("/health")
     assert res.status_code == 200
     data = res.json()
     assert data["status"] == "ok"
@@ -15,7 +16,7 @@ def test_health():
 def test_txt_doc():
     content = b"# TOR Assignment\n\n## 1. Scope of Work\nThe bidder shall conduct a financial audit.\n"
     files = {"file": ("test_tor.txt", content, "text/plain")}
-    res = requests.post(f"{BASE_URL}/process-document", files=files)
+    res = client.post("/process-document", files=files)
     assert res.status_code == 200
     data = res.json()
     assert data["success"] is True
@@ -27,7 +28,7 @@ def test_txt_doc():
 def test_invalid_file():
     content = b"MZ\x90\x00\x03\x00\x00\x00"
     files = {"file": ("malicious.exe", content, "application/octet-stream")}
-    res = requests.post(f"{BASE_URL}/process-document", files=files)
+    res = client.post("/process-document", files=files)
     assert res.status_code == 400
     data = res.json()
     assert data["success"] is False
@@ -36,7 +37,7 @@ def test_invalid_file():
 
 def test_empty_file():
     files = {"file": ("empty.pdf", b"", "application/pdf")}
-    res = requests.post(f"{BASE_URL}/process-document", files=files)
+    res = client.post("/process-document", files=files)
     assert res.status_code == 400
     data = res.json()
     assert data["success"] is False
@@ -50,3 +51,4 @@ if __name__ == "__main__":
     test_invalid_file()
     test_empty_file()
     print("--- All Endpoints & Processing Tests Passed Successfully! ---")
+

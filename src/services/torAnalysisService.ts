@@ -401,12 +401,18 @@ export class TorAnalysisService {
       const line = lines[i].trim();
       const cleanHeading = line.replace(/^#+\s*/, '').trim();
 
-      const titleLabelMatch = cleanHeading.match(/(?:assignment\s+title|title\s+of\s+the\s+assignment|name\s+of\s+the\s+consultancy|project\s+title|terms\s+of\s+reference\s+for|tor\s+for)[:\s]+([^\n]{5,150})/i);
+      const titleLabelMatch = cleanHeading.match(/(?:assignment\s+title|title\s+of\s+the\s+assignment|name\s+of\s+the\s+consultancy|project\s+title|terms\s+of\s+reference\s+(?:\(tor\)\s+)?for|tor\s+for|scope\s+of\s+services\s+for|rfp\s+for)[:\s]+([^\n]{5,150})/i);
+      const auditMatch = cleanHeading.match(/^(?:special\s+|statutory\s+|internal\s+|external\s+|annual\s+|forensic\s+)?audit\s+of\s+([^\n]{5,120})/i);
+
       if (titleLabelMatch && !title) {
         title = titleLabelMatch[1].trim();
+      } else if (auditMatch && !title) {
+        title = cleanHeading;
       } else if (!title && (line.startsWith('# ') || line.startsWith('## ')) && cleanHeading.length > 10 && cleanHeading.length < 150) {
         if (!cleanHeading.toLowerCase().includes('table of content') && !cleanHeading.toLowerCase().includes('abbreviation')) {
-          title = cleanHeading;
+          // If heading contains "Terms of Reference for Audit of X", extract "Audit of X"
+          const torSubMatch = cleanHeading.match(/terms\s+of\s+reference\s+(?:\(tor\)\s+)?for\s+(.+)/i);
+          title = torSubMatch ? torSubMatch[1].trim() : cleanHeading;
         }
       }
 

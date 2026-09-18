@@ -79,6 +79,25 @@ export class ProposalDatabaseService {
   }
 
   /**
+   * Deletes a single proposal project from the database.
+   */
+  static async deleteProject(projectId: string): Promise<Project[]> {
+    try {
+      const projects = await ProposalDatabaseService.fetchProposals();
+      const filtered = projects.filter((p) => p.id !== projectId);
+      localStorage.setItem(DB_KEY, JSON.stringify(filtered));
+      localStorage.removeItem(`acnabin_project_requirements_${projectId}`);
+      localStorage.removeItem(`acnabin_project_tor_model_${projectId}`);
+      localStorage.removeItem(`acnabin_proposal_draft_${projectId}`);
+      localStorage.removeItem(`acnabin_proposal_draft_versions_${projectId}`);
+      return filtered;
+    } catch (e) {
+      console.error('Error deleting project from database:', e);
+      return [];
+    }
+  }
+
+  /**
    * Resets database back to default initial seed.
    */
   static resetDatabase(): Project[] {
@@ -97,6 +116,7 @@ export class ProposalDatabaseService {
     }
     return [];
   }
+
 
   /**
    * Save extracted requirements per project

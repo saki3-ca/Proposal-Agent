@@ -457,9 +457,9 @@ export class DocxGenerationService {
 
     // Dynamic Margins & Geometry Resolution
     const coverTopMargin = 1080; // 0.75"
-    const coverBottomMargin = 1080; // 0.75"
+    const coverBottomMargin = 720; // 0.50" (bottom margin updated from 0.75")
     const bodyTopMargin = 1440; // 1.00"
-    const bodyBottomMargin = 1080; // 0.75"
+    const bodyBottomMargin = 720; // 0.50" (bottom margin updated from 0.75")
     const bodyLeftMargin = 1080; // 0.75"
     const bodyRightMargin = 1080; // 0.75"
     const headerDistance = parseDistanceToDxa(houseStyle?.document?.headerDistance, 720);
@@ -480,8 +480,10 @@ export class DocxGenerationService {
           totalNonEmptyBlocks++;
           totalTextLength += b.content.length;
         }
-        if (b.type === 'TABLE') totalTables++;
-        if (b.type === 'PLACEHOLDER' || (b.content && b.content.includes('[TO BE PROVIDED]'))) {
+        if (b.type === 'TABLE' || (b.content && b.content.includes('|') && b.content.includes('---'))) {
+          totalTables++;
+        }
+        if (b.type === 'PLACEHOLDER' || (b.content && b.content.includes('[TO BE PROVIDED'))) {
           totalPlaceholders++;
         }
       });
@@ -489,12 +491,23 @@ export class DocxGenerationService {
 
     console.log(`[Phase 8 DOCX] ProposalDraft Diagnostics: Sections: ${draft.sections.length}, Content Blocks: ${totalContentBlocks}, Tables: ${totalTables}, Placeholders: ${totalPlaceholders}, Non-Empty Blocks: ${totalNonEmptyBlocks}, Total Text Length: ${totalTextLength}`);
 
-    // Dynamic Proposal Type and Client Resolution
+    // Dynamic Proposal Type, Actual Audit Assignment, and Client Resolution
     const isFinancialProposal = (draft.title || '').toLowerCase().includes('financial') || (draft as any).proposalType === 'FINANCIAL';
-    const proposalTypeWord = isFinancialProposal ? 'Financial Proposal for' : 'Technical Proposal for';
+    const proposalHeaderType = isFinancialProposal ? 'FINANCIAL PROPOSAL' : 'TECHNICAL PROPOSAL';
+
+    // Extract assignment subject without redundant 'Technical Proposal for' prefixes
+    let assignmentSubject = (draft.title || '')
+      .replace(/^technical\s+proposal\s+(?:for\s+)?/i, '')
+      .replace(/^financial\s+proposal\s+(?:for\s+)?/i, '')
+      .trim();
+
+    if (!assignmentSubject || assignmentSubject.length < 3) {
+      assignmentSubject = 'Audit and Advisory Consultancy Services';
+    }
+
     const clientDisplayName = draft.clientName && draft.clientName !== 'Target Client' && draft.clientName !== 'Target Procurement Client'
       ? draft.clientName
-      : 'Bangladesh Youth Coalition (BYC)';
+      : 'Procuring Entity / Client';
 
     // Date formatting for cover: e.g. "September 2026"
     const coverDateStr = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(new Date());
@@ -535,16 +548,16 @@ export class DocxGenerationService {
       );
     }
 
-    // 3. ~1" gap -> Proposal Title
+    // 3. Proposal Header & Assignment Title Hierarchy
     coverChildren.push(
       new Paragraph({
         alignment: AlignmentType.CENTER,
-        spacing: { before: 1100, after: 140, line: 280 },
+        spacing: { before: 900, after: 120, line: 280 },
         children: [
           new TextRun({
-            text: draft.title.toUpperCase(),
+            text: proposalHeaderType,
             font: primaryFont,
-            size: 26, // 13pt
+            size: 28, // 14pt
             bold: true,
             color: h1Color
           })
@@ -552,12 +565,12 @@ export class DocxGenerationService {
       }),
       new Paragraph({
         alignment: AlignmentType.CENTER,
-        spacing: { before: 60, after: 40, line: 260 },
+        spacing: { before: 60, after: 120, line: 280 },
         children: [
           new TextRun({
-            text: `${proposalTypeWord.toUpperCase()}`,
+            text: assignmentSubject.toUpperCase(),
             font: primaryFont,
-            size: 22, // 11pt
+            size: 24, // 12pt
             bold: true,
             color: h2Color
           })
@@ -565,14 +578,14 @@ export class DocxGenerationService {
       }),
       new Paragraph({
         alignment: AlignmentType.CENTER,
-        spacing: { before: 0, after: 140, line: 260 },
+        spacing: { before: 40, after: 140, line: 260 },
         children: [
           new TextRun({
-            text: `${clientDisplayName.toUpperCase()}`,
+            text: `CLIENT / PROCURING ENTITY: ${clientDisplayName.toUpperCase()}`,
             font: primaryFont,
-            size: 22, // 11pt
+            size: 20, // 10pt
             bold: true,
-            color: h2Color
+            color: bodyTextColor
           })
         ]
       }),
@@ -1289,7 +1302,7 @@ export class DocxGenerationService {
                   spacing: { after: 0, line: 240 },
                   children: [
                     new TextRun({
-                      text: proposalTypeWord,
+                      text: `${proposalHeaderType} - `,
                       font: 'Tahoma',
                       size: 21, // 10.5 pt (21 half-points)
                       bold: true,

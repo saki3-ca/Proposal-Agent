@@ -71,6 +71,14 @@ export function App() {
     setSelectedProjectId(null);
   };
 
+  const handleDeleteProject = async (projectId: string) => {
+    const remaining = await ProposalDatabaseService.deleteProject(projectId);
+    setProjects(remaining);
+    if (selectedProjectId === projectId) {
+      setSelectedProjectId(null);
+    }
+  };
+
   const handleGlobalUpload = () => {
     if (currentPath.startsWith('/projects/')) {
       setCurrentPath(currentPath);
@@ -115,6 +123,7 @@ export function App() {
             onQuickAnalyzeTor={() => setIsScratchOpen(true)}
             onRefreshProposals={loadDatabaseProposals}
             onClearProposals={handleClearProposals}
+            onDeleteProposal={handleDeleteProject}
             onOpenProgressModal={handleOpenProgressModal}
           />
         )}

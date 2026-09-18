@@ -17,6 +17,7 @@ interface ActiveProjectsTableProps {
   onNavigate: (path: string) => void;
   onNewProposal: () => void;
   onClearProposals?: () => void;
+  onDeleteProposal?: (projectId: string) => void;
   onOpenProgressModal?: (project: Project) => void;
 }
 
@@ -25,6 +26,7 @@ export const ActiveProjectsTable: React.FC<ActiveProjectsTableProps> = ({
   onNavigate,
   onNewProposal,
   onClearProposals,
+  onDeleteProposal,
   onOpenProgressModal
 }) => {
   const [activeFilterTab, setActiveFilterTab] = useState<'all' | 'due_soon' | 'in_progress' | 'review'>('all');
@@ -334,16 +336,32 @@ export const ActiveProjectsTable: React.FC<ActiveProjectsTableProps> = ({
 
                     {/* Action */}
                     <td className="py-3 px-4 text-right whitespace-nowrap">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRowClick(p);
-                        }}
-                        className="inline-flex items-center space-x-1 px-2.5 py-1 bg-[#1B2A6B] hover:bg-[#152152] text-white rounded text-xs font-bold transition-colors shadow-2xs"
-                      >
-                        <span>Open</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex items-center justify-end space-x-1.5">
+                        {onDeleteProposal && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (window.confirm(`Are you sure you want to delete proposal "${p.assignmentTitle || p.name}"?`)) {
+                                onDeleteProposal(p.id);
+                              }
+                            }}
+                            className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                            title="Delete Proposal"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRowClick(p);
+                          }}
+                          className="inline-flex items-center space-x-1 px-2.5 py-1 bg-[#1B2A6B] hover:bg-[#152152] text-white rounded text-xs font-bold transition-colors shadow-2xs"
+                        >
+                          <span>Open</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );

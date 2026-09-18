@@ -267,8 +267,13 @@ Return ONLY a valid JSON array of content blocks:
 [
   {
     "type": "HEADING" | "PARAGRAPH" | "BULLET_LIST" | "NUMBERED_LIST" | "TABLE" | "CALLOUT" | "PLACEHOLDER",
-    "content": "Text content here...",
-    "headingLevel": 2, // optional, for HEADING
+    "content": "Introductory or descriptive text...",
+    "items": ["Point 1", "Point 2", "Point 3"], // MANDATORY FOR LISTS: provide each bullet or numbered item as a separate array entry
+    "tableData": { // FOR TABLES: provide clean structured headers and rows
+      "headers": ["Phase / Component", "Activity Scope", "Deliverable Output"],
+      "rows": [["Phase 1: Inception", "Initial stakeholder interviews and diagnostic scoping", "Inception Report"]]
+    },
+    "headingLevel": 2, // optional, for HEADING (2-4)
     "requirementReferences": ["REQ-001"], // optional mapped REQ IDs
     "evidenceReferences": ["EVID-001"] // optional mapped Evidence IDs
   }
@@ -326,16 +331,13 @@ Generate the structured proposal blocks now as JSON array.`;
       updatedAt: new Date().toISOString()
     };
 
-    // Validate section
-    const validationResult = ProposalDraftValidator.validateSection(updatedSection, contextPkg);
+    // Validate section using async semantic evaluation
+    const validationResult = await ProposalDraftValidator.validateSectionAsync(updatedSection, contextPkg);
     updatedSection.completenessScore = validationResult.completenessScore;
     updatedSection.evidenceCoverageScore = validationResult.evidenceCoverageScore;
     updatedSection.evidenceGapCount = validationResult.gaps.length;
     updatedSection.unsupportedClaimCount = validationResult.unsupportedClaimCount;
-
-    if (validationResult.hasHardBlockers) {
-      updatedSection.status = 'BLOCKED';
-    }
+    updatedSection.status = validationResult.status;
 
     // Save back to draft
     draft.sections[secIndex] = updatedSection;
@@ -366,17 +368,31 @@ Generate the structured proposal blocks now as JSON array.`;
     try {
       const parsedArray = JSON.parse(jsonStr);
       if (Array.isArray(parsedArray)) {
-        return parsedArray.map((item: any, idx: number) => ({
-          id: `blk_${Date.now()}_${idx}`,
-          type: item.type || 'PARAGRAPH',
-          order: idx + 1,
-          content: ProposalDraftingService.cleanProposalContent(String(item.content || '')),
-          headingLevel: item.headingLevel || (item.type === 'HEADING' ? 2 : undefined),
-          requirementReferences: item.requirementReferences || contextPkg.mappedRequirements.map((r) => r.id),
-          evidenceReferences: item.evidenceReferences || contextPkg.corporateEvidence.map((e) => e.id),
-          confidence: 0.9,
-          reviewStatus: 'AI_GENERATED' as BlockReviewStatus
-        }));
+        return parsedArray.map((item: any, idx: number) => {
+          let items = Array.isArray(item.items) ? item.items.map((it: any) => String(it).trim()).filter(Boolean) : undefined;
+          
+          // If items not given as array but content has multiple lines with bullets
+          if (!items && (item.type === 'BULLET_LIST' || item.type === 'NUMBERED_LIST') && String(item.content || '').includes('\n')) {
+            items = String(item.content || '')
+              .split('\n')
+              .map((line) => line.replace(/^[-*•\d+.]\s*/, '').trim())
+              .filter(Boolean);
+          }
+
+          return {
+            id: `blk_${Date.now()}_${idx}`,
+            type: item.type || 'PARAGRAPH',
+            order: idx + 1,
+            content: ProposalDraftingService.cleanProposalContent(String(item.content || '')),
+            items: items,
+            tableData: item.tableData && typeof item.tableData === 'object' ? item.tableData : undefined,
+            headingLevel: item.headingLevel || (item.type === 'HEADING' ? 2 : undefined),
+            requirementReferences: item.requirementReferences || contextPkg.mappedRequirements.map((r) => r.id),
+            evidenceReferences: item.evidenceReferences || contextPkg.corporateEvidence.map((e) => e.id),
+            confidence: 0.9,
+            reviewStatus: 'AI_GENERATED' as BlockReviewStatus
+          };
+        });
       }
     } catch (e) {
       // Fallback to Markdown line parser
@@ -385,12 +401,50 @@ Generate the structured proposal blocks now as JSON array.`;
     // Markdown Parser Fallback
     const lines = rawText.split('\n');
     let blockCounter = 1;
+    let currentBulletGroup: string[] = [];
+    let currentNumberedGroup: string[] = [];
+
+    const flushBulletGroup = () => {
+      if (currentBulletGroup.length > 0) {
+        blocks.push({
+          id: `blk_${Date.now()}_${blockCounter++}`,
+          type: 'BULLET_LIST',
+          order: blockCounter,
+          content: currentBulletGroup[0],
+          items: [...currentBulletGroup],
+          confidence: 0.9,
+          reviewStatus: 'AI_GENERATED'
+        });
+        currentBulletGroup = [];
+      }
+    };
+
+    const flushNumberedGroup = () => {
+      if (currentNumberedGroup.length > 0) {
+        blocks.push({
+          id: `blk_${Date.now()}_${blockCounter++}`,
+          type: 'NUMBERED_LIST',
+          order: blockCounter,
+          content: currentNumberedGroup[0],
+          items: [...currentNumberedGroup],
+          confidence: 0.9,
+          reviewStatus: 'AI_GENERATED'
+        });
+        currentNumberedGroup = [];
+      }
+    };
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
-      if (!line) continue;
+      if (!line) {
+        flushBulletGroup();
+        flushNumberedGroup();
+        continue;
+      }
 
       if (line.startsWith('#')) {
+        flushBulletGroup();
+        flushNumberedGroup();
         const hashes = line.match(/^#+/)?.[0] || '#';
         const level = hashes.length;
         const text = line.replace(/^#+\s*/, '');
@@ -403,27 +457,56 @@ Generate the structured proposal blocks now as JSON array.`;
           confidence: 0.9,
           reviewStatus: 'AI_GENERATED'
         });
-      } else if (line.startsWith('- ') || line.startsWith('* ')) {
-        const bulletText = line.replace(/^[-*]\s*/, '');
-        blocks.push({
-          id: `blk_${Date.now()}_${blockCounter++}`,
-          type: 'BULLET_LIST',
-          order: blockCounter,
-          content: ProposalDraftingService.cleanProposalContent(bulletText),
-          confidence: 0.9,
-          reviewStatus: 'AI_GENERATED'
-        });
+      } else if (line.startsWith('- ') || line.startsWith('* ') || line.startsWith('• ')) {
+        flushNumberedGroup();
+        const bulletText = line.replace(/^[-*•]\s*/, '');
+        currentBulletGroup.push(ProposalDraftingService.cleanProposalContent(bulletText));
       } else if (/^\d+\.\s/.test(line)) {
+        flushBulletGroup();
         const numText = line.replace(/^\d+\.\s*/, '');
+        currentNumberedGroup.push(ProposalDraftingService.cleanProposalContent(numText));
+      } else if (line.startsWith('>')) {
+        flushBulletGroup();
+        flushNumberedGroup();
+        const calloutText = line.replace(/^>\s*/, '');
         blocks.push({
           id: `blk_${Date.now()}_${blockCounter++}`,
-          type: 'NUMBERED_LIST',
+          type: 'CALLOUT',
           order: blockCounter,
-          content: ProposalDraftingService.cleanProposalContent(numText),
-          confidence: 0.9,
+          content: ProposalDraftingService.cleanProposalContent(calloutText),
+          confidence: 0.95,
           reviewStatus: 'AI_GENERATED'
         });
-      } else if (line.includes('[TO BE PROVIDED]')) {
+      } else if (line.startsWith('|') && line.endsWith('|')) {
+        flushBulletGroup();
+        flushNumberedGroup();
+        // Parse markdown table
+        const tableLines = [line];
+        while (i + 1 < lines.length && lines[i + 1].trim().startsWith('|') && lines[i + 1].trim().endsWith('|')) {
+          i++;
+          tableLines.push(lines[i].trim());
+        }
+        if (tableLines.length >= 2) {
+          const headers = tableLines[0].split('|').map((c) => c.trim()).filter(Boolean);
+          const dataRows = tableLines.slice(1)
+            .filter((l) => !l.includes('---'))
+            .map((l) => l.split('|').map((c) => c.trim()).filter(Boolean));
+          blocks.push({
+            id: `blk_${Date.now()}_${blockCounter++}`,
+            type: 'TABLE',
+            order: blockCounter,
+            content: tableLines.join('\n'),
+            tableData: {
+              headers: headers,
+              rows: dataRows
+            },
+            confidence: 0.92,
+            reviewStatus: 'AI_GENERATED'
+          });
+        }
+      } else if (line.includes('[TO BE PROVIDED')) {
+        flushBulletGroup();
+        flushNumberedGroup();
         blocks.push({
           id: `blk_${Date.now()}_${blockCounter++}`,
           type: 'PLACEHOLDER',
@@ -433,6 +516,8 @@ Generate the structured proposal blocks now as JSON array.`;
           reviewStatus: 'FLAGGED'
         });
       } else {
+        flushBulletGroup();
+        flushNumberedGroup();
         blocks.push({
           id: `blk_${Date.now()}_${blockCounter++}`,
           type: 'PARAGRAPH',
@@ -443,6 +528,9 @@ Generate the structured proposal blocks now as JSON array.`;
         });
       }
     }
+
+    flushBulletGroup();
+    flushNumberedGroup();
 
     return blocks.length > 0 ? blocks : ProposalDraftingService.generateFallbackBlocks(contextPkg);
   }
