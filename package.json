@@ -9,8 +9,8 @@
     "dev:backend": "python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload",
     "backend": "python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload",
     "backend:test": "python backend/test_processor.py",
-    "build": "tsc && vite build && node -e \"const fs=require('fs'); if(fs.existsSync('dist')){ fs.cpSync('dist', 'backend/dist', {recursive: true, force: true}); }\"",
-    "vercel-build": "tsc && vite build && node -e \"const fs=require('fs'); if(fs.existsSync('dist')){ fs.cpSync('dist', 'backend/dist', {recursive: true, force: true}); }\"",
+    "build": "tsc -b && vite build",
+    "vercel-build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
