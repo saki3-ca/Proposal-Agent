@@ -126,7 +126,7 @@ export class TorAnalysisValidator {
     totalEvaluatedFields++;
     let validDeadline = model.submission?.deadline?.trim();
     if (!validDeadline || validDeadline === 'To Be Specified' || !isGroundedinSource(validDeadline)) {
-      const subDeadlineMatch = sourceMarkdown.match(/(?:submission\s+deadline|deadline\s+for\s+submission|closing\s+date|proposals?\s+due|proposals?\s+must\s+be\s+received\s+(?:by|before|on))[:\s]*([A-Za-z0-9\s,\-–/:()]{5,60})/i);
+      const subDeadlineMatch = sourceMarkdown.match(/(?:submission\s+deadline|deadline\s+for\s+submission|closing\s+date|proposals?\s+due|proposals?\s+must\s+be\s+submitted|proposals?\s+must\s+be\s+received\s+(?:by|before|on)|on\s+or\s+before|no\s+later\s+than)[:\s]*([A-Za-z0-9\s,\-–/:()]{3,80})/i);
       if (subDeadlineMatch && isGroundedinSource(subDeadlineMatch[1])) {
         validDeadline = subDeadlineMatch[1].trim();
         groundedFieldsCount++;
@@ -136,6 +136,20 @@ export class TorAnalysisValidator {
       }
     } else {
       groundedFieldsCount++;
+    }
+
+    if (validDeadline) {
+      let cleaned = validDeadline
+        .replace(/^(?:proposals?\s+(?:must\s+be\s+submitted|must\s+be\s+received|due)\s+(?:by|on|before|no\s+later\s+than)\s*)/i, '')
+        .replace(/^(?:on\s+or\s+before|no\s+later\s+than|before|by|closing\s+date\s*:\s*|deadline\s*:\s*)/i, '')
+        .trim();
+      cleaned = cleaned.replace(/(\d)\s+(\d)\s*(st|nd|rd|th)/gi, '$1$2$3');
+      const dateMatch = cleaned.match(/(?:(?:\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4})|(?:[A-Za-z]+\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4})|(?:\d{1,2}[-/.]\d{1,2}[-/.]\d{4})|(?:\d{4}[-/.]\d{1,2}[-/.]\d{1,2}))(?:\s*(?:at|by|before|,)?\s*\d{1,2}[:.]\d{2}(?:\s*(?:am|pm|gmt|bst|utc))?)?/i);
+      if (dateMatch && dateMatch[0].trim().length >= 6) {
+        validDeadline = dateMatch[0].trim();
+      } else if (cleaned.length > 0) {
+        validDeadline = cleaned;
+      }
     }
 
     // 4. Validate Submission Email (Context-specific)
@@ -433,6 +447,27 @@ export class TorAnalysisService {
     let refNumber: string | undefined = undefined;
     let location = '';
 
+    // Helper to sanitize extracted deadline dates to date/time only (removing "Proposals must be submitted by...")
+    const cleanDeadlineString = (raw: string): string => {
+      if (!raw) return '';
+      let cleaned = raw
+        .replace(/^(?:proposals?\s+(?:must\s+be\s+submitted|must\s+be\s+received|due)\s+(?:by|on|before|no\s+later\s+than)\s*)/i, '')
+        .replace(/^(?:on\s+or\s+before|no\s+later\s+than|before|by|closing\s+date\s*:\s*|deadline\s*:\s*)/i, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      // Normalize spaced digits e.g. "1 5 th July 2026" -> "15th July 2026"
+      cleaned = cleaned.replace(/(\d)\s+(\d)\s*(st|nd|rd|th)/gi, '$1$2$3');
+
+      // Extract strict date string e.g. "July 31, 2026", "15th July 2026", "31-07-2026", "2026-07-31" with optional time
+      const dateMatch = cleaned.match(/(?:(?:\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4})|(?:[A-Za-z]+\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4})|(?:\d{1,2}[-/.]\d{1,2}[-/.]\d{4})|(?:\d{4}[-/.]\d{1,2}[-/.]\d{1,2}))(?:\s*(?:at|by|before|,)?\s*\d{1,2}[:.]\d{2}(?:\s*(?:am|pm|gmt|bst|utc))?)?/i);
+      if (dateMatch && dateMatch[0].trim().length >= 6) {
+        return dateMatch[0].trim();
+      }
+
+      return cleaned;
+    };
+
     // Extract title: check markdown H1/H2, explicit ToR titles, or first prominent line
     for (let i = 0; i < Math.min(30, lines.length); i++) {
       const line = lines[i].trim();
@@ -457,7 +492,7 @@ export class TorAnalysisService {
       }
 
       // Detect Client: Look for "About <Client Name>" header or top organizational header
-      const aboutClientMatch = cleanHeading.match(/(?:\d+\.\s*)?About\s+([A-Z][A-Za-z0-9\s,&.\-–]{3,80}?)(?:\s+Foundation|\s+Limited|\s+Ltd|\s+PLC|\s+Bangladesh|\s+Society|\s+Trust|\s+Trustee|\s+Hub|\s+Network|\s+Bank|\s+Company|\s*$)/i);
+      const aboutClientMatch = cleanHeading.match(/(?:\d+\.\s*)?About\s+([A-Z][A-Za-z0-9\s,&.\-–]{3,80}?)(?:\s+Foundation|\s+Centre|\s+Center|\s+Institute|\s+Limited|\s+Ltd|\s+PLC|\s+Bangladesh|\s+Society|\s+Trust|\s+Trustee|\s+Hub|\s+Network|\s+Bank|\s+Company|\s*$)/i);
       const clientLabelMatch = cleanHeading.match(/^(?:client|issuing\s+organization|procuring\s+entity|contracting\s+authority|employer)[:\s]+([A-Z][^\n.,]{3,80})/i);
       
       // Check if line before "Terms of Reference" is an organization name
@@ -466,7 +501,8 @@ export class TorAnalysisService {
                           !cleanHeading.toLowerCase().startsWith('contact') && 
                           !cleanHeading.toLowerCase().startsWith('email') && 
                           !cleanHeading.toLowerCase().startsWith('terms of reference') &&
-                          (cleanHeading.includes('Foundation') || cleanHeading.includes('Limited') || cleanHeading.includes('PLC') || cleanHeading.includes('Bank') || cleanHeading.includes('Bangladesh') || cleanHeading.includes('Association'));
+                          !cleanHeading.toLowerCase().startsWith('background') &&
+                          (cleanHeading.includes('Foundation') || cleanHeading.includes('Centre') || cleanHeading.includes('Center') || cleanHeading.includes('CRP') || cleanHeading.includes('Limited') || cleanHeading.includes('PLC') || cleanHeading.includes('Bank') || cleanHeading.includes('Bangladesh') || cleanHeading.includes('Association'));
 
       if (aboutClientMatch && !client) {
         client = aboutClientMatch[1].trim();
@@ -490,11 +526,15 @@ export class TorAnalysisService {
       }
     }
 
-    // Secondary client scan across document if not found in header
+    // Secondary client scan across document (e.g. "Centre for the Rehabilitation of the Paralysed (CRP) is dedicated...")
     if (!client) {
-      const aboutMatch = text.match(/(?:\d+\.\s*)?About\s+([A-Z][A-Za-z0-9\s,&.\-–]{3,60}(?:Foundation|Limited|Ltd|PLC|Bangladesh|Bank|Society|Trust|Network|Agency))/i);
-      if (aboutMatch) {
-        client = aboutMatch[1].trim();
+      const backgroundOrgMatch = text.match(/(?:about|background(?:\s+of)?)\s*[:\n\-–]*\s*([A-Z][A-Za-z0-9\s,&.\-–]{3,80}?(?:\([A-Z0-9]+\))?)(?:\s+is\s+|\s+was\s+|\s+dedicated\s+|\s+working\s+|\n|\.)/i);
+      if (backgroundOrgMatch && backgroundOrgMatch[1].trim().length > 3) {
+        const candidate = backgroundOrgMatch[1].trim();
+        // Ignore descriptive sentence starters like "The purpose" or "This assignment"
+        if (!candidate.toLowerCase().startsWith('the purpose') && !candidate.toLowerCase().startsWith('this ') && !candidate.toLowerCase().startsWith('an assessment')) {
+          client = candidate;
+        }
       }
     }
 
@@ -505,16 +545,15 @@ export class TorAnalysisService {
     // 2. Context-Aware Submission Deadline Extraction
     let deadline = '';
     const deadlineContextPatterns = [
-      /(?:submission\s+deadline|deadline\s+for\s+submission|closing\s+date|proposals?\s+due|proposals?\s+must\s+be\s+submitted\s+(?:by|before|no\s+later\s+than|on)|proposals?\s+must\s+be\s+received\s+(?:by|before|no\s+later\s+than))[:\s]*([^\n.,;]{5,60})/i,
-      /(?:last\s+date\s+of\s+submission|application\s+deadline)[:\s]*([^\n.,;]{5,60})/i,
+      /(?:submission\s+deadline|deadline\s+for\s+submission|closing\s+date|proposals?\s+due|proposals?\s+must\s+be\s+submitted|proposals?\s+must\s+be\s+received|on\s+or\s+before|no\s+later\s+than|application\s+deadline|submission\s+of\s+(?:expression\s+of\s+interest|proposals?|eoi)[:\s\S]{0,80}?(?:on\s+or\s+before|by))[:\s]*([^\n.,;]{3,80})/i,
       /(?:deadline)[:\s]*(\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4}(?:\s*,\s*\d{1,2}[:.]\d{2}\s*(?:am|pm|gmt|bst|utc)?)?)/i
     ];
 
     for (const pattern of deadlineContextPatterns) {
       const match = text.match(pattern);
       if (match) {
-        const candidate = match[1].trim().replace(/^by\s+/i, '').trim();
-        if (/\d{4}/.test(candidate) || /(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i.test(candidate) || /\d{1,2}\/\d{1,2}/.test(candidate)) {
+        const candidate = cleanDeadlineString(match[1]);
+        if (candidate && (/\d{4}/.test(candidate) || /(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i.test(candidate) || /\d{1,2}\/\d{1,2}/.test(candidate))) {
           deadline = candidate;
           break;
         }
@@ -526,7 +565,7 @@ export class TorAnalysisService {
     let queryEmail = '';
     let contactPerson = '';
 
-    const subEmailMatch = text.match(/(?:submission\s+email|send\s+(?:proposals?|applications?)\s+to|submit\s+(?:via|to)\s+email)[:\s]*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
+    const subEmailMatch = text.match(/(?:submission\s+email|send\s+(?:proposals?|applications?)\s+to|submit\s+(?:via|to)\s+email|email\s*:)[:\s]*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
     if (subEmailMatch) {
       submissionEmail = subEmailMatch[1].trim();
     }
@@ -579,34 +618,34 @@ export class TorAnalysisService {
     const endMatch = text.match(/(?:end\s+date|completion\s+date|concluding\s+date)[:\s]+([^\n.,]{3,40})/i);
     if (endMatch) endDate = endMatch[1].trim();
 
-    // 5. Objectives Extraction
+    // 5. Objectives Extraction (Supports Role Purpose, Objectives of the Assignment, Primary Objectives)
     let overallObjective = '';
     const specificObjectives: string[] = [];
 
-    const objSectionRegex = /(?:##+\s*|\n)(?:\d+\.\s*)?(?:Specific\s+)?Objectives?([\s\S]*?)(?=(?:##+\s*|\n)(?:\d+\.\s*)?(?:Scope|Deliverables|Methodology|Outputs|Team|Qualifications)|$)/i;
+    const objSectionRegex = /(?:##+\s*|\n)(?:\d+\.\s*)?(?:(?:Primary|Specific|Assignment|Main)\s+)?Objectives?(?:\s+of\s+the\s+Assignment)?|(?:Role\s+Purpose|Purpose\s+of\s+(?:this\s+)?(?:Consultancy|Assignment))([\s\S]*?)(?=(?:##+\s*|\n)(?:\d+\.\s*)?(?:Scope|Key\s+Responsibilities|Deliverables|Methodology|Outputs|Team|Qualifications)|$)/i;
     const objMatch = text.match(objSectionRegex);
     if (objMatch && objMatch[1]) {
       const objLines = objMatch[1].split('\n');
       for (const rawLine of objLines) {
         const clean = rawLine.trim().replace(/^[-*•\d.]+\s*/, '');
-        if (clean.length > 15 && !clean.toLowerCase().includes('table of content') && !clean.toLowerCase().startsWith('registration:')) {
+        if (clean.length > 15 && !clean.toLowerCase().includes('table of content') && !clean.toLowerCase().startsWith('registration:') && !clean.toLowerCase().startsWith('address:')) {
           if (!overallObjective) overallObjective = clean;
           else specificObjectives.push(clean);
         }
       }
     }
 
-    // 6. Scope of Work & Out of Scope Activities
+    // 6. Scope of Work & Out of Scope Activities (Supports Key Responsibilities, Areas of Work, Scope of Services)
     const scopeComponents: string[] = [];
     const outOfScope: string[] = [];
 
-    const scopeSectionRegex = /(?:##+\s*|\n)(?:\d+\.\s*)?Scope\s+of\s+Work([\s\S]*?)(?=(?:##+\s*|\n)(?:\d+\.\s*)?(?:Expected\s+Deliverables|Deliverables|Outputs|Timeline|Duration|Methodology|Team)|$)/i;
+    const scopeSectionRegex = /(?:##+\s*|\n)(?:\d+\.\s*)?(?:Scope\s+of\s+(?:Work|Services)|Key\s+Responsibilities|Major\s+Components|Areas\s+of\s+Work)([\s\S]*?)(?=(?:##+\s*|\n)(?:\d+\.\s*)?(?:Expected\s+Deliverables|Deliverables|Outputs|Timeline|Duration|Methodology|Team|Qualifications|Validation)|$)/i;
     const scopeMatch = text.match(scopeSectionRegex);
     if (scopeMatch && scopeMatch[1]) {
       const scopeLines = scopeMatch[1].split('\n');
       for (const rawLine of scopeLines) {
         const clean = rawLine.trim().replace(/^[-*•\d.]+\s*/, '');
-        if (clean.length > 15 && !clean.toLowerCase().includes('table of content') && !clean.toLowerCase().startsWith('registration:')) {
+        if (clean.length > 15 && !clean.toLowerCase().includes('table of content') && !clean.toLowerCase().startsWith('registration:') && !clean.toLowerCase().startsWith('address:')) {
           if (clean.toLowerCase().includes('out of scope') || clean.toLowerCase().includes('exclusion') || clean.toLowerCase().includes('not included')) {
             outOfScope.push(clean);
           } else {
@@ -628,9 +667,9 @@ export class TorAnalysisService {
       }
     }
 
-    // 7. Deliverables Extraction (Parse strictly numbered items and avoid letterhead / preamble noise)
+    // 7. Deliverables Extraction (Strict section boundary stop at Duration, Eligibility, Submission)
     const deliverables: { name: string; format?: string; quantity?: string; dueDate?: string; milestone?: string; paymentPct?: number }[] = [];
-    const delivSectionRegex = /(?:##+\s*|\n)(?:\d+\.\s*)?(?:(?:Expected\s+)?(?:Technical\s+)?Deliverables|Expected\s+Outputs)([\s\S]*?)(?=(?:##+\s*|\n)(?:\d+\.\s*)?(?:Duration|Timeline|Assignment\s+Duration|Team|Qualifications|Payment|Evaluation|Application\s+Requirements)|$)/i;
+    const delivSectionRegex = /(?:##+\s*|\n)(?:\d+\.\s*)?(?:(?:Expected\s+)?(?:Technical\s+)?Deliverables|Expected\s+Outputs|Deliverables\s+Schedule)([\s\S]*?)(?=(?:##+\s*|\n)(?:\d+\.\s*)?(?:Assignment\s+Duration|Duration|Timeline|Reporting\s+Line|Required\s+Qualifications|Key\s+Qualifications|Eligibility\s+Criteria|Submission\s+of\s+Expression\s+of\s+Interest|Submission\s+Guidelines|Payment\s+Schedule|Evaluation\s+Criteria|Application\s+Requirements|Expected\s+Outcomes)|$)/i;
     const delivMatch = text.match(delivSectionRegex);
     if (delivMatch && delivMatch[1]) {
       const delivLines = delivMatch[1].split('\n');
@@ -642,13 +681,18 @@ export class TorAnalysisService {
           continue;
         }
 
-        // Check if line starts with a deliverable number (e.g. "1. Inception Report", "2. Draft Policy")
+        // Check if line starts with a deliverable number (e.g. "1. Inception Report", "2. Draft Policy") or bullet
         const numMatch = trimmed.match(/^(\d+)\.\s+([^\n]+)/);
-        if (numMatch) {
-          const itemText = numMatch[2].trim();
+        const bulletMatch = trimmed.match(/^[-*•]\s+([^\n]+)/);
+        
+        const candidateText = numMatch ? numMatch[2].trim() : (bulletMatch ? bulletMatch[1].trim() : '');
+        if (candidateText && candidateText.length > 5) {
           // Filter out generic boilerplate headers like "The consultant/firm will submit the following deliverables:"
-          if (!itemText.toLowerCase().includes('following deliverables') && !itemText.toLowerCase().includes('table of content')) {
-            currentDelivName = itemText;
+          if (!candidateText.toLowerCase().includes('following deliverables') && 
+              !candidateText.toLowerCase().includes('table of content') &&
+              !candidateText.toLowerCase().includes('the consultant will submit') &&
+              !candidateText.toLowerCase().includes('the consultant will provide')) {
+            currentDelivName = candidateText;
             const dueMatch = currentDelivName.match(/(?:due|within|by|timeline)[:\s]+([^()]+)/i);
             deliverables.push({
               name: currentDelivName,
