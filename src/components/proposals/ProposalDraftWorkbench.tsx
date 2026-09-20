@@ -95,11 +95,15 @@ export const ProposalDraftWorkbench: React.FC<ProposalDraftWorkbenchProps> = ({ 
     }
     setDraft(loaded);
     if (loaded && loaded.sections.length > 0) {
-      setSelectedSectionId(loaded.sections[0].id);
+      setSelectedSectionId((prev) => prev || loaded.sections[0].id);
     }
   }, [projectId]);
 
-  if (!draft) {
+  if (!draft || !draft.sections || draft.sections.length === 0) {
+    const initialized = ProposalDraftingService.initializeDraftFromPlan(projectId);
+    if (initialized && initialized.sections && initialized.sections.length > 0) {
+      setDraft(initialized);
+    }
     return (
       <div className="p-12 text-center bg-white rounded-2xl border border-slate-200 shadow-sm max-w-xl mx-auto my-12">
         <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto mb-4 animate-pulse">
@@ -111,7 +115,7 @@ export const ProposalDraftWorkbench: React.FC<ProposalDraftWorkbenchProps> = ({ 
     );
   }
 
-  const activeSectionIndex = draft.sections.findIndex((s) => s.id === selectedSectionId || s.sectionNumber === selectedSectionId);
+  const activeSectionIndex = draft.sections.findIndex((s) => s.id === selectedSectionId || (Boolean(selectedSectionId) && Boolean(s.sectionNumber) && s.sectionNumber === selectedSectionId));
   const activeSection = activeSectionIndex >= 0 ? draft.sections[activeSectionIndex] : draft.sections[0];
   const contextPkg = activeSection ? ProposalDraftContextService.buildSectionDraftContext(projectId, activeSection.id) : null;
 
@@ -132,7 +136,7 @@ export const ProposalDraftWorkbench: React.FC<ProposalDraftWorkbenchProps> = ({ 
     setIsDraftingSection(true);
     try {
       const res = await ProposalDraftingService.draftSection(projectId, activeSection.id);
-      setDraft(res.draft);
+      setDraft({ ...res.draft });
     } catch (e: any) {
       alert(`Drafting error: ${e?.message || e}`);
     } finally {
@@ -145,8 +149,17 @@ export const ProposalDraftWorkbench: React.FC<ProposalDraftWorkbenchProps> = ({ 
     setDraftingProgressText('Starting AI generation pipeline...');
     try {
       // Loop through sequentially with live progress update
-      let currentDraft = ProposalDraftingService.getProposalDraft(projectId) || ProposalDraftingService.initializeDraftFromPlan(projectId);
+      let currentDraft = ProposalDraftingService.getProposalDraft(projectId);
+      if (!currentDraft || !currentDraft.sections || currentDraft.sections.length === 0) {
+        currentDraft = ProposalDraftingService.initializeDraftFromPlan(projectId);
+      }
+      setDraft({ ...currentDraft });
+
       const total = currentDraft.sections.length;
+      if (total === 0) {
+        console.warn('No sections found to draft.');
+        return;
+      }
 
       const execSummary = currentDraft.sections.find((s) => s.title.toLowerCase().includes('executive summary'));
       const sectionsToDraft = currentDraft.sections.filter((s) => s.id !== execSummary?.id && s.status !== 'APPROVED');
@@ -173,7 +186,7 @@ export const ProposalDraftWorkbench: React.FC<ProposalDraftWorkbenchProps> = ({ 
       }
 
       const finalized = ProposalDraftingService.getProposalDraft(projectId);
-      if (finalized) setDraft(finalized);
+      if (finalized) setDraft({ ...finalized });
     } catch (e: any) {
       console.error('Proposal batch drafting error:', e);
       alert(`Proposal drafting notice: ${e?.message || e}`);

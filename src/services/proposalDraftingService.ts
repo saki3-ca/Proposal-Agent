@@ -111,7 +111,9 @@ export class ProposalDraftingService {
           updatedAt: new Date().toISOString()
         };
       });
-    } else {
+    }
+
+    if (!draftSections || draftSections.length === 0) {
       // Fallback to standard 18 baseline sections
       const baseline = ProposalDraftingService.getStandardBaselineSections();
       draftSections = baseline.map((sec, idx) => ({
