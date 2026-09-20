@@ -433,29 +433,50 @@ export class TorAnalysisService {
     let refNumber: string | undefined = undefined;
     let location = '';
 
-    // Extract title: check markdown H1/H2 or first prominent line
-    for (let i = 0; i < Math.min(25, lines.length); i++) {
+    // Extract title: check markdown H1/H2, explicit ToR titles, or first prominent line
+    for (let i = 0; i < Math.min(30, lines.length); i++) {
       const line = lines[i].trim();
       const cleanHeading = line.replace(/^#+\s*/, '').trim();
 
-      const titleLabelMatch = cleanHeading.match(/(?:assignment\s+title|title\s+of\s+the\s+assignment|name\s+of\s+the\s+consultancy|project\s+title|terms\s+of\s+reference\s+(?:\(tor\)\s+)?for|tor\s+for|scope\s+of\s+services\s+for|rfp\s+for)[:\s]+([^\n]{5,150})/i);
+      // Detect explicit Terms of Reference title format
+      const torColonMatch = cleanHeading.match(/terms\s+of\s+reference\s*(?:\(tor\)\s*)?[:\-–]\s*([^\n]{5,200})/i);
+      const titleLabelMatch = cleanHeading.match(/(?:assignment\s+title|title\s+of\s+the\s+assignment|name\s+of\s+the\s+consultancy|project\s+title|terms\s+of\s+reference\s+(?:\(tor\)\s+)?for|tor\s+for|scope\s+of\s+services\s+for|rfp\s+for)[:\s]+([^\n]{5,200})/i);
       const auditMatch = cleanHeading.match(/^(?:special\s+|statutory\s+|internal\s+|external\s+|annual\s+|forensic\s+)?audit\s+of\s+([^\n]{5,120})/i);
 
-      if (titleLabelMatch && !title) {
+      if (torColonMatch && !title) {
+        title = torColonMatch[1].trim();
+      } else if (titleLabelMatch && !title) {
         title = titleLabelMatch[1].trim();
       } else if (auditMatch && !title) {
         title = cleanHeading;
       } else if (!title && (line.startsWith('# ') || line.startsWith('## ')) && cleanHeading.length > 10 && cleanHeading.length < 150) {
-        if (!cleanHeading.toLowerCase().includes('table of content') && !cleanHeading.toLowerCase().includes('abbreviation')) {
-          // If heading contains "Terms of Reference for Audit of X", extract "Audit of X"
+        if (!cleanHeading.toLowerCase().includes('table of content') && !cleanHeading.toLowerCase().includes('abbreviation') && !cleanHeading.toLowerCase().startsWith('registration:')) {
           const torSubMatch = cleanHeading.match(/terms\s+of\s+reference\s+(?:\(tor\)\s+)?for\s+(.+)/i);
           title = torSubMatch ? torSubMatch[1].trim() : cleanHeading;
         }
       }
 
-      const clientLabelMatch = cleanHeading.match(/(?:client|issuing\s+organization|procuring\s+entity|contracting\s+authority|procurement\s+entity|organization|authority)[:\s]+([^\n.,]{3,100})/i);
-      if (clientLabelMatch && !client) {
+      // Detect Client: Look for "About <Client Name>" header or top organizational header
+      const aboutClientMatch = cleanHeading.match(/(?:\d+\.\s*)?About\s+([A-Z][A-Za-z0-9\s,&.\-–]{3,80}?)(?:\s+Foundation|\s+Limited|\s+Ltd|\s+PLC|\s+Bangladesh|\s+Society|\s+Trust|\s+Trustee|\s+Hub|\s+Network|\s+Bank|\s+Company|\s*$)/i);
+      const clientLabelMatch = cleanHeading.match(/^(?:client|issuing\s+organization|procuring\s+entity|contracting\s+authority|employer)[:\s]+([A-Z][^\n.,]{3,80})/i);
+      
+      // Check if line before "Terms of Reference" is an organization name
+      const isOrgHeader = !cleanHeading.toLowerCase().startsWith('registration:') && 
+                          !cleanHeading.toLowerCase().startsWith('address:') && 
+                          !cleanHeading.toLowerCase().startsWith('contact') && 
+                          !cleanHeading.toLowerCase().startsWith('email') && 
+                          !cleanHeading.toLowerCase().startsWith('terms of reference') &&
+                          (cleanHeading.includes('Foundation') || cleanHeading.includes('Limited') || cleanHeading.includes('PLC') || cleanHeading.includes('Bank') || cleanHeading.includes('Bangladesh') || cleanHeading.includes('Association'));
+
+      if (aboutClientMatch && !client) {
+        client = aboutClientMatch[1].trim();
+        if (!client.toLowerCase().includes('foundation') && cleanHeading.toLowerCase().includes('foundation')) {
+          client = `${client} Foundation`;
+        }
+      } else if (clientLabelMatch && !client) {
         client = clientLabelMatch[1].trim();
+      } else if (isOrgHeader && !client && i < 10) {
+        client = cleanHeading;
       }
 
       const refMatch = cleanHeading.match(/(?:reference\s*no\.?|ref\s*no\.?|rfp\s*no\.?|tender\s*no\.?|eoi\s*no\.?)[:\s]*([A-Za-z0-9_\-\/.]+)/i);
@@ -469,6 +490,14 @@ export class TorAnalysisService {
       }
     }
 
+    // Secondary client scan across document if not found in header
+    if (!client) {
+      const aboutMatch = text.match(/(?:\d+\.\s*)?About\s+([A-Z][A-Za-z0-9\s,&.\-–]{3,60}(?:Foundation|Limited|Ltd|PLC|Bangladesh|Bank|Society|Trust|Network|Agency))/i);
+      if (aboutMatch) {
+        client = aboutMatch[1].trim();
+      }
+    }
+
     if (!title) {
       title = fileName.replace(/\.[^/.]+$/, '').replace(/_/g, ' ');
     }
@@ -476,7 +505,7 @@ export class TorAnalysisService {
     // 2. Context-Aware Submission Deadline Extraction
     let deadline = '';
     const deadlineContextPatterns = [
-      /(?:submission\s+deadline|deadline\s+for\s+submission|closing\s+date|proposals?\s+due|proposals?\s+must\s+be\s+received\s+(?:by|before|no\s+later\s+than))[:\s]*([^\n.,;]{5,60})/i,
+      /(?:submission\s+deadline|deadline\s+for\s+submission|closing\s+date|proposals?\s+due|proposals?\s+must\s+be\s+submitted\s+(?:by|before|no\s+later\s+than|on)|proposals?\s+must\s+be\s+received\s+(?:by|before|no\s+later\s+than))[:\s]*([^\n.,;]{5,60})/i,
       /(?:last\s+date\s+of\s+submission|application\s+deadline)[:\s]*([^\n.,;]{5,60})/i,
       /(?:deadline)[:\s]*(\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+\d{4}(?:\s*,\s*\d{1,2}[:.]\d{2}\s*(?:am|pm|gmt|bst|utc)?)?)/i
     ];
@@ -484,7 +513,7 @@ export class TorAnalysisService {
     for (const pattern of deadlineContextPatterns) {
       const match = text.match(pattern);
       if (match) {
-        const candidate = match[1].trim();
+        const candidate = match[1].trim().replace(/^by\s+/i, '').trim();
         if (/\d{4}/.test(candidate) || /(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i.test(candidate) || /\d{1,2}\/\d{1,2}/.test(candidate)) {
           deadline = candidate;
           break;
@@ -522,15 +551,15 @@ export class TorAnalysisService {
     let submissionMethod = '';
     if (lowerText.includes('electronic procurement') || lowerText.includes('e-gp') || lowerText.includes('eprocure')) {
       submissionMethod = 'Electronic Procurement Portal (e-GP)';
-    } else if (lowerText.includes('email') && (lowerText.includes('hard copy') || lowerText.includes('physical envelope') || lowerText.includes('sealed envelope'))) {
-      submissionMethod = 'Email and Physical Sealed Envelopes';
-    } else if (lowerText.includes('sealed envelope') || lowerText.includes('hard copy')) {
+    } else if (lowerText.includes('email') && (lowerText.includes('hard copy') || lowerText.includes('physical envelope') || lowerText.includes('sealed envelope') || lowerText.includes('physically to:'))) {
+      submissionMethod = 'Email, Physical submission';
+    } else if (lowerText.includes('sealed envelope') || lowerText.includes('hard copy') || lowerText.includes('physical copy')) {
       submissionMethod = 'Physical Sealed Envelopes';
     } else if (lowerText.includes('email') || submissionEmail) {
       submissionMethod = 'Electronic Email Submission';
     }
 
-    const locationMatch = text.match(/(?:location|duty\s+station|place\s+of\s+work|assignment\s+location)[:\s]+([^\n.,]{3,80})/i);
+    const locationMatch = text.match(/(?:location|duty\s+station|place\s+of\s+work|assignment\s+location|address)[:\s]+([^\n.]{5,100})/i);
     if (locationMatch) {
       location = locationMatch[1].trim();
     }
@@ -560,7 +589,7 @@ export class TorAnalysisService {
       const objLines = objMatch[1].split('\n');
       for (const rawLine of objLines) {
         const clean = rawLine.trim().replace(/^[-*•\d.]+\s*/, '');
-        if (clean.length > 15 && !clean.toLowerCase().includes('table of content')) {
+        if (clean.length > 15 && !clean.toLowerCase().includes('table of content') && !clean.toLowerCase().startsWith('registration:')) {
           if (!overallObjective) overallObjective = clean;
           else specificObjectives.push(clean);
         }
@@ -577,7 +606,7 @@ export class TorAnalysisService {
       const scopeLines = scopeMatch[1].split('\n');
       for (const rawLine of scopeLines) {
         const clean = rawLine.trim().replace(/^[-*•\d.]+\s*/, '');
-        if (clean.length > 15 && !clean.toLowerCase().includes('table of content')) {
+        if (clean.length > 15 && !clean.toLowerCase().includes('table of content') && !clean.toLowerCase().startsWith('registration:')) {
           if (clean.toLowerCase().includes('out of scope') || clean.toLowerCase().includes('exclusion') || clean.toLowerCase().includes('not included')) {
             outOfScope.push(clean);
           } else {
@@ -599,20 +628,33 @@ export class TorAnalysisService {
       }
     }
 
-    // 7. Deliverables Extraction
+    // 7. Deliverables Extraction (Parse strictly numbered items and avoid letterhead / preamble noise)
     const deliverables: { name: string; format?: string; quantity?: string; dueDate?: string; milestone?: string; paymentPct?: number }[] = [];
-    const delivSectionRegex = /(?:##+\s*|\n)(?:\d+\.\s*)?(?:(?:Expected\s+)?(?:Technical\s+)?Deliverables|Expected\s+Outputs)([\s\S]*?)(?=(?:##+\s*|\n)(?:\d+\.\s*)?(?:Duration|Timeline|Team|Qualifications|Payment|Evaluation)|$)/i;
+    const delivSectionRegex = /(?:##+\s*|\n)(?:\d+\.\s*)?(?:(?:Expected\s+)?(?:Technical\s+)?Deliverables|Expected\s+Outputs)([\s\S]*?)(?=(?:##+\s*|\n)(?:\d+\.\s*)?(?:Duration|Timeline|Assignment\s+Duration|Team|Qualifications|Payment|Evaluation|Application\s+Requirements)|$)/i;
     const delivMatch = text.match(delivSectionRegex);
     if (delivMatch && delivMatch[1]) {
       const delivLines = delivMatch[1].split('\n');
+      let currentDelivName = '';
+      
       for (const rawLine of delivLines) {
-        const clean = rawLine.trim().replace(/^[-*•\d.]+\s*/, '');
-        if (clean.length > 12 && !clean.toLowerCase().includes('table of content') && !clean.startsWith('|---')) {
-          const dueMatch = clean.match(/(?:due|within|by|timeline)[:\s]+([^()]+)/i);
-          deliverables.push({
-            name: clean,
-            dueDate: dueMatch ? dueMatch[1].trim() : undefined
-          });
+        const trimmed = rawLine.trim();
+        if (!trimmed || trimmed.toLowerCase().startsWith('registration:') || trimmed.toLowerCase().startsWith('address:') || trimmed.toLowerCase().startsWith('contact') || trimmed.toLowerCase().startsWith('email')) {
+          continue;
+        }
+
+        // Check if line starts with a deliverable number (e.g. "1. Inception Report", "2. Draft Policy")
+        const numMatch = trimmed.match(/^(\d+)\.\s+([^\n]+)/);
+        if (numMatch) {
+          const itemText = numMatch[2].trim();
+          // Filter out generic boilerplate headers like "The consultant/firm will submit the following deliverables:"
+          if (!itemText.toLowerCase().includes('following deliverables') && !itemText.toLowerCase().includes('table of content')) {
+            currentDelivName = itemText;
+            const dueMatch = currentDelivName.match(/(?:due|within|by|timeline)[:\s]+([^()]+)/i);
+            deliverables.push({
+              name: currentDelivName,
+              dueDate: dueMatch ? dueMatch[1].trim() : undefined
+            });
+          }
         }
       }
     }
