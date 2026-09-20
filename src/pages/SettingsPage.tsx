@@ -3,7 +3,7 @@ import { Settings, Sparkles, Database, ShieldCheck, Key, RefreshCw } from 'lucid
 
 export const SettingsPage: React.FC = () => {
   const [primaryAi, setPrimaryAi] = useState('gemini-1.5-pro');
-  const [secondaryAi, setSecondaryAi] = useState('deepseek-r1');
+  const [secondaryAi, setSecondaryAi] = useState('cloudflare-glm-4.7');
   const [cacheHash, setCacheHash] = useState(true);
 
   return (
@@ -35,8 +35,8 @@ export const SettingsPage: React.FC = () => {
               onChange={(e) => setPrimaryAi(e.target.value)}
               className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded text-xs font-mono font-bold text-slate-900"
             >
-              <option value="gemini-1.5-pro">Gemini 1.5 Pro (Recommended)</option>
-              <option value="gemini-1.5-flash">Gemini 1.5 Flash (Fast Extraction)</option>
+              <option value="gemini-3.6-flash">Google Gemini (gemini-3.6-flash)</option>
+              <option value="groq-gpt-oss">Groq (openai/gpt-oss-120b)</option>
             </select>
             <p className="text-[11px] text-slate-500 mt-1">Handles PDF vision OCR assistance, long-document extraction, and technical drafting.</p>
           </div>
@@ -50,15 +50,15 @@ export const SettingsPage: React.FC = () => {
               onChange={(e) => setSecondaryAi(e.target.value)}
               className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded text-xs font-mono font-bold text-slate-900"
             >
-              <option value="deepseek-r1">DeepSeek R1 (Reasoning Engine)</option>
-              <option value="deepseek-v3">DeepSeek V3 (Compliance Review)</option>
+              <option value="cloudflare-glm-4.7">Cloudflare Workers AI (@cf/zai-org/glm-4.7-flash)</option>
+              <option value="groq-gpt-oss">Groq (openai/gpt-oss-120b)</option>
             </select>
             <p className="text-[11px] text-slate-500 mt-1">Runs second-opinion analysis for high-risk mandatory requirements.</p>
           </div>
         </div>
 
         <div className="p-3 bg-slate-50 border border-slate-200 rounded text-xs space-y-1 font-mono text-slate-700">
-          <p><strong>Security Note:</strong> All API keys are securely stored server-side in environment secrets (`GEMINI_API_KEY`, `DEEPSEEK_API_KEY`). Secrets are never exposed to client-side code.</p>
+          <p><strong>Security Note:</strong> All API keys are securely stored server-side in backend environment secrets (`GROQ_API_KEY`, `CLOUDFLARE_API_TOKEN`, `GEMINI_API_KEY`). Secrets are never exposed to client-side code.</p>
         </div>
       </div>
 

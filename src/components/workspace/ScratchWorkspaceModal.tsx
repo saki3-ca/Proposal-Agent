@@ -316,15 +316,15 @@ export const ScratchWorkspaceModal: React.FC<ScratchWorkspaceModalProps> = ({
 ---
 
 ## 1. Assignment & Client Overview
-* **Client / Organization:** ${overview.client || 'Not stated in TOR'}
+* **Client / Organization:** ${overview.client || '[To be confirmed by User]'}
 * **Assignment Title:** ${overview.assignment}
-* **Submission Deadline:** ${overview.deadline || 'Not stated in TOR'}
+* **Submission Deadline:** ${overview.deadline || '[To be confirmed by User]'}
 * **Estimated Duration:** ${overview.duration || 'Not specified in TOR'}
 * **Location / Duty Station:** ${overview.location || 'Not specified in TOR'}
 * **Submission Method:** ${overview.submissionMethod || 'Not specified in TOR'}
-* **Submission Address:** ${overview.submissionAddress || 'Not stated in TOR'}
-* **Submission Email:** ${overview.submissionEmail || 'Not stated in TOR'}
-* **Contact Person / Query Point:** ${overview.contactPerson || 'Not stated in TOR'}
+* **Submission Address:** ${overview.submissionAddress || 'Not specified in TOR'}
+* **Submission Email:** ${overview.submissionEmail || 'Not specified in TOR'}
+* **Contact Person / Query Point:** ${overview.contactPerson || 'Not specified in TOR'}
 
 ---
 
@@ -564,14 +564,14 @@ ${requirements.map((r, i) => `| ${i + 1} | ${r.category || 'Technical'} | ${r.so
 
   <div class="section-title">1. Assignment & Client Overview</div>
   <div class="overview-grid">
-    <div class="grid-item"><strong>Client / Organization:</strong> ${overview.client || 'Not stated in TOR'}</div>
-    <div class="grid-item"><strong>Submission Deadline:</strong> ${overview.deadline || 'Not stated in TOR'}</div>
+    <div class="grid-item"><strong>Client / Organization:</strong> ${overview.client || '<span style="color: #b45309; font-weight: 600;">[Action Required: Confirm Client]</span>'}</div>
+    <div class="grid-item"><strong>Submission Deadline:</strong> ${overview.deadline || 'To be confirmed'}</div>
     <div class="grid-item"><strong>Estimated Duration:</strong> ${overview.duration || 'Not specified in TOR'}</div>
     <div class="grid-item"><strong>Duty Station / Location:</strong> ${overview.location || 'Not specified in TOR'}</div>
     <div class="grid-item"><strong>Submission Method:</strong> ${overview.submissionMethod || 'Not specified in TOR'}</div>
-    <div class="grid-item"><strong>Submission Email:</strong> ${overview.submissionEmail || 'Not stated in TOR'}</div>
-    <div class="grid-item"><strong>Submission Address:</strong> ${overview.submissionAddress || 'Not stated in TOR'}</div>
-    <div class="grid-item"><strong>Contact / Query Point:</strong> ${overview.contactPerson || 'Not stated in TOR'}</div>
+    <div class="grid-item"><strong>Submission Email:</strong> ${overview.submissionEmail || 'Not specified in TOR'}</div>
+    <div class="grid-item"><strong>Submission Address:</strong> ${overview.submissionAddress || 'Not specified in TOR'}</div>
+    <div class="grid-item"><strong>Contact / Query Point:</strong> ${overview.contactPerson || 'Not specified in TOR'}</div>
   </div>
 
   <div class="section-title">2. Key Objectives & Scope of Work</div>
@@ -709,7 +709,7 @@ ${requirements.map((r, i) => `| ${i + 1} | ${r.category || 'Technical'} | ${r.so
     const newProj: Project = {
       id: projectId,
       name: overview.assignment,
-      client: overview.client,
+      client: overview.client || '[Action Required: Confirm Client]',
       assignmentTitle: overview.assignment,
       tenderType: 'Consultancy',
       refNumber: torModel.assignmentContext?.refNumber || `REF-${Date.now().toString().slice(-4)}`,
@@ -717,7 +717,7 @@ ${requirements.map((r, i) => `| ${i + 1} | ${r.category || 'Technical'} | ${r.so
       submissionDeadline: deadlineStr,
       daysLeft: ProposalDatabaseService.calculateDaysLeft(deadlineStr) || 14,
       assignedTo: 'SAKIB',
-      issuingOrg: overview.client,
+      issuingOrg: overview.client || '[Action Required: Confirm Client]',
       manager: 'SAKIB',
       status: 'In Progress',
       remarks: `Created via Quick TOR Analyzer (${extractionMethod})`,
@@ -1478,7 +1478,7 @@ ${requirements.map((r, i) => `| ${i + 1} | ${r.category || 'Technical'} | ${r.so
                             </div>
                             <div>
                               <strong>Submission Email/Address:</strong>{' '}
-                              {analysisResult.overview.submissionEmail || analysisResult.overview.submissionAddress || 'Not stated in TOR'}
+                              {analysisResult.overview.submissionEmail || analysisResult.overview.submissionAddress || 'Not specified in TOR'}
                             </div>
                           </div>
                         </div>

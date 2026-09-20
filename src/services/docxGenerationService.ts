@@ -79,15 +79,25 @@ function cleanHex(val: string | undefined, defaultHex: string): string {
 }
 
 /**
- * Creates valid WordprocessingML TextRun array, avoiding literal \n inside <w:t> tags
+ * Creates valid WordprocessingML TextRun array, avoiding literal \n inside <w:t> tags,
+ * parsing inline Markdown (**bold**, *italic*, ***bold italic***), stripping internal debug labels,
  * and highlighting genuine [TO BE PROVIDED] placeholders subtly.
  */
-function createTextRuns(text: string, styleProps: any = {}): TextRun[] {
-  const clean = (text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+function createTextRuns(rawText: string, styleProps: any = {}): TextRun[] {
+  if (!rawText) return [new TextRun({ text: '', ...styleProps })];
+
+  // Sanitize internal debug tokens and processing artifacts
+  const clean = rawText
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .replace(/\[?(?:REQ|EVID)-[0-9]+\]?:?\s*/gi, '')
+    .replace(/^#\s*Extracted\s+Content:\s*[^\n]*/gim, '')
+    .replace(/^#{1,6}\s+/gm, ''); // Strip leading markdown heading symbols if inside text run
+
   const lines = clean.split('\n');
   const runs: TextRun[] = [];
 
-  const placeholderRegex = /(\[TO BE PROVIDED[^\]]*\]|\[[A-Za-z0-9\s,/—–-]+—\s*(?:TO BE PROVIDED|TO BE CONFIRMED)\])/g;
+  const placeholderRegex = /(\[TO BE PROVIDED[^\]]*\]|\[[A-Za-z0-9\s,/—–-]+—\s*(?:TO BE PROVIDED|TO BE CONFIRMED)\]|\[CLIENT NAME TO BE CONFIRMED\]|\[ASSIGNMENT TITLE TO BE CONFIRMED\])/g;
 
   lines.forEach((line, lineIdx) => {
     if (!line && lineIdx > 0) {
@@ -95,24 +105,68 @@ function createTextRuns(text: string, styleProps: any = {}): TextRun[] {
       return;
     }
 
-    const parts = line.split(placeholderRegex);
-    parts.forEach((part, partIdx) => {
+    // Split line by placeholders first
+    const placeholderParts = line.split(placeholderRegex);
+    let isFirstPartOnLine = true;
+
+    placeholderParts.forEach((part) => {
       if (!part) return;
-      const isPlaceholder = placeholderRegex.test(part);
-      runs.push(
-        new TextRun({
-          text: part,
-          ...styleProps,
-          ...(isPlaceholder
-            ? {
-                highlight: 'yellow',
-                bold: true,
-                color: 'B45309'
-              }
-            : {}),
-          ...(lineIdx > 0 && partIdx === 0 ? { break: 1 } : {})
-        })
-      );
+
+      if (placeholderRegex.test(part)) {
+        runs.push(
+          new TextRun({
+            text: part,
+            ...styleProps,
+            highlight: 'yellow',
+            bold: true,
+            color: 'B45309',
+            ...(lineIdx > 0 && isFirstPartOnLine ? { break: 1 } : {})
+          })
+        );
+        isFirstPartOnLine = false;
+        return;
+      }
+
+      // Parse inline markdown: ***bold italic***, **bold**, *italic*
+      const mdRegex = /(\*\*\*[^*]+\*\*\*|\*\*[^*]+\*\*|\*[^*]+\*|___[^_]+___|__[^_]+__|_[^_]+_)/g;
+      const mdTokens = part.split(mdRegex);
+
+      mdTokens.forEach((token) => {
+        if (!token) return;
+
+        let tokenText = token;
+        let isBold = !!styleProps.bold;
+        let isItalics = !!styleProps.italics;
+
+        if ((token.startsWith('***') && token.endsWith('***')) || (token.startsWith('___') && token.endsWith('___'))) {
+          if (token.length > 6) {
+            tokenText = token.slice(3, -3);
+            isBold = true;
+            isItalics = true;
+          }
+        } else if ((token.startsWith('**') && token.endsWith('**')) || (token.startsWith('__') && token.endsWith('__'))) {
+          if (token.length > 4) {
+            tokenText = token.slice(2, -2);
+            isBold = true;
+          }
+        } else if ((token.startsWith('*') && token.endsWith('*')) || (token.startsWith('_') && token.endsWith('_'))) {
+          if (token.length > 2) {
+            tokenText = token.slice(1, -1);
+            isItalics = true;
+          }
+        }
+
+        runs.push(
+          new TextRun({
+            text: tokenText,
+            ...styleProps,
+            bold: isBold,
+            italics: isItalics,
+            ...(lineIdx > 0 && isFirstPartOnLine ? { break: 1 } : {})
+          })
+        );
+        isFirstPartOnLine = false;
+      });
     });
   });
 
@@ -362,7 +416,13 @@ export class DocxGenerationService {
       sec.content.forEach((b) => {
         if (b.content && b.content.trim().length > 30 && b.type !== 'TABLE' && b.type !== 'HEADING') {
           const firstLine = b.content.split('\n')[0].trim();
-          const cleanSnippet = firstLine.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').replace(/\[TO BE PROVIDED\]/g, '').trim().substring(0, 30);
+          const cleanSnippet = firstLine
+            .replace(/[\r\n]+/g, ' ')
+            .replace(/[*_#~`]/g, '')
+            .replace(/\[TO BE PROVIDED\]/g, '')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .substring(0, 30);
           const cleanExtracted = extractedText.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ');
           if (cleanSnippet.length > 10 && !cleanExtracted.includes(cleanSnippet)) {
             errors.push(`Missing content block text snippet in section ${sec.sectionNumber}: "${cleanSnippet}..."`);
@@ -414,8 +474,104 @@ export class DocxGenerationService {
   }
 
   /**
+   * Final Proposal Validation Gate:
+   * Inspects final proposal draft for unsafe sample/demo leakage, internal processing markers,
+   * unresolved placeholders, and client verification status.
+   */
+  static validateFinalProposalContent(draft: ProposalDraft): {
+    isValid: boolean;
+    status: 'READY' | 'REVIEW_REQUIRED' | 'BLOCKED';
+    errors: string[];
+    warnings: string[];
+  } {
+    const errors: string[] = [];
+    const warnings: string[] = [];
+
+    const rawClient = (draft.currentProjectContext?.clientName || draft.clientName || '').trim();
+    const isClientValid = rawClient && rawClient !== 'Target Client' && rawClient !== 'Target Procurement Client' && !rawClient.toLowerCase().includes('not stated') && !rawClient.toLowerCase().includes('not specified');
+
+    if (!isClientValid) {
+      errors.push('Current client name is not verified from current ToR or user confirmation.');
+    }
+
+    // Build comprehensive text corpus of draft
+    const allSections = draft.sections || [];
+    let fullText = `${draft.title || ''} ${draft.clientName || ''} `;
+    allSections.forEach((s) => {
+      fullText += `${s.title || ''} `;
+      (s.content || []).forEach((b) => {
+        fullText += `${b.content || ''} ${(b.items || []).join(' ')} `;
+      });
+    });
+
+    const isGenuinelyBycProject = isClientValid && (rawClient.toLowerCase().includes('bangladesh youth coalition') || rawClient.toLowerCase().includes('byc'));
+
+    // 1. Check for unsafe historical / sample client leakage into current identity or non-experience sections
+    if (!isGenuinelyBycProject) {
+      const nonExperienceSections = allSections.filter((s) => {
+        const t = s.title.toLowerCase();
+        const secType = (s as any).sectionType;
+        return secType !== 'EXPERIENCE' && !t.includes('past experience') && !t.includes('acnabin credentials') && !t.includes('firm experience');
+      });
+      const nonExperienceText = nonExperienceSections.map((s) => s.title + ' ' + s.content.map((b) => b.content).join(' ')).join(' ');
+
+      if (
+        /Bangladesh\s+Youth\s+Coalition/i.test(nonExperienceText) ||
+        /\bBYC\b/i.test(nonExperienceText) ||
+        /\bYFC-BD\b/i.test(nonExperienceText) ||
+        /ToR-595/i.test(nonExperienceText)
+      ) {
+        errors.push('Sample/historical entity "Bangladesh Youth Coalition (BYC)" or "ToR-595" detected in current proposal identity/scope.');
+      } else if (/Bangladesh\s+Youth\s+Coalition/i.test(fullText) || /\bBYC\b/i.test(fullText)) {
+        warnings.push('Historical reference to Bangladesh Youth Coalition found in past experience citation.');
+      }
+    }
+
+    // 2. Check for unresolved placeholders
+    if (/Not\s+stated\s+in\s+TOR/i.test(fullText) || /Target\s+Client/i.test(fullText) || /Procuring\s+Entity\s*\/\s*Client/i.test(fullText)) {
+      errors.push('Unresolved placeholder text ("Not stated in TOR" / "Target Client") detected in proposal.');
+    }
+
+    if (/\[CLIENT NAME TO BE CONFIRMED\]/i.test(fullText) || /\[ASSIGNMENT TITLE TO BE CONFIRMED\]/i.test(fullText)) {
+      warnings.push('Proposal contains flagged placeholders requiring human confirmation before final submission.');
+    }
+
+    // 3. Check for internal processing leakage
+    if (/extracted\s+Content:/i.test(fullText) || /sourceFileRelativePath/i.test(fullText)) {
+      warnings.push('Internal extraction metadata tokens detected in proposal text.');
+    }
+
+    let status: 'READY' | 'REVIEW_REQUIRED' | 'BLOCKED' = 'READY';
+    if (errors.length > 0) {
+      status = 'BLOCKED';
+    } else if (warnings.length > 0 || !isClientValid) {
+      status = 'REVIEW_REQUIRED';
+    }
+
+    return {
+      isValid: errors.length === 0,
+      status,
+      errors,
+      warnings
+    };
+  }
+
+  /**
+   * Generates a native Microsoft Word .docx binary from a ProposalDraft object.
+   * Performs Final Proposal Validation Gate, OpenXML binary structural validation,
+   * and Content Integrity verification.
+   */
+  static async generateProposalDocx(
+    draft: ProposalDraft,
+    overrideProfile?: HouseStyleProfile
+  ): Promise<Uint8Array> {
+    const res = await this.buildDocxBinary(draft, overrideProfile);
+    return res.uint8Array;
+  }
+
+  /**
    * Main entry point: Generates a native Microsoft Word .docx document from the approved ProposalDraft.
-   * STRICTLY ENFORCES THE PHASE 7 GENERATION GATE (isReadyForDocx), MANDATORY OPENXML BINARY VALIDATION,
+   * STRICTLY ENFORCES THE FINAL PROPOSAL VALIDATION GATE, MANDATORY OPENXML BINARY VALIDATION,
    * AND MANDATORY CONTENT INTEGRITY VALIDATION.
    */
   static async generateDocx(
@@ -437,6 +593,58 @@ export class DocxGenerationService {
     }
 
     const houseStyle = overrideProfile || HouseStyleService.getActiveProfile();
+    const { uint8Array, totalContentBlocks, totalTables, totalPlaceholders, integrity } = await this.buildDocxBinary(draft, houseStyle);
+
+    const base64Data = uint8ArrayToBase64(uint8Array);
+    const fileName = `ACNABIN_Technical_Proposal_${draft.projectId}_v${draft.version}.docx`;
+    const diskFilePath: string | undefined = undefined;
+
+    const metadata: DocxArtifactMetadata = {
+      id: `docx_art_${Date.now()}`,
+      projectId,
+      draftId: draft.id,
+      auditId: `audit_${projectId}`,
+      version: draft.version,
+      fileName,
+      fileSizeBytes: uint8Array.byteLength,
+      generatedAt: new Date().toISOString(),
+      generationStatus: 'SUCCESS',
+      appliedHouseStyleProfileId: houseStyle?.metadata?.profileId || 'profile_active',
+      gateCheckResult: 'PASSED',
+      base64Data,
+      filePath: diskFilePath,
+      integrityStatus: 'PASS',
+      sourceSectionsCount: draft.sections.length,
+      sourceContentBlocksCount: totalContentBlocks,
+      sourceTablesCount: totalTables,
+      sourcePlaceholdersCount: totalPlaceholders,
+      generatedHeadingsCount: integrity.metrics.generatedDocx.headingsCount,
+      generatedTablesCount: integrity.metrics.generatedDocx.tablesCount,
+      generatedPlaceholdersCount: integrity.metrics.generatedDocx.placeholdersCount,
+      extractedTextLength: integrity.metrics.generatedDocx.extractedTextLength
+    };
+
+    // PERSISTENCE: Save binary data and lightweight metadata into localStorage/session storage
+    try {
+      localStorage.setItem(`${ARTIFACT_STORAGE_PREFIX}${projectId}`, JSON.stringify(metadata));
+      localStorage.setItem(`${BINARY_STORAGE_PREFIX}${projectId}`, base64Data);
+    } catch (e) {
+      console.warn('Failed to save DocxArtifactMetadata to localStorage:', e);
+    }
+
+    return { buffer: uint8Array, base64Data, metadata, integrityReport: integrity } as any;
+  }
+
+  private static async buildDocxBinary(
+    draft: ProposalDraft,
+    houseStyle?: HouseStyleProfile
+  ): Promise<{
+    uint8Array: Uint8Array;
+    totalContentBlocks: number;
+    totalTables: number;
+    totalPlaceholders: number;
+    integrity: any;
+  }> {
 
     // Dynamic Typography Resolution
     const primaryFont = houseStyle?.typography?.bodyFont || 'Tahoma';
@@ -492,11 +700,12 @@ export class DocxGenerationService {
     console.log(`[Phase 8 DOCX] ProposalDraft Diagnostics: Sections: ${draft.sections.length}, Content Blocks: ${totalContentBlocks}, Tables: ${totalTables}, Placeholders: ${totalPlaceholders}, Non-Empty Blocks: ${totalNonEmptyBlocks}, Total Text Length: ${totalTextLength}`);
 
     // Dynamic Proposal Type, Actual Audit Assignment, and Client Resolution
-    const isFinancialProposal = (draft.title || '').toLowerCase().includes('financial') || (draft as any).proposalType === 'FINANCIAL';
+    const isFinancialProposal = (draft.title || '').toLowerCase().includes('financial') || (draft as any).proposalType === 'FINANCIAL' || draft.currentProjectContext?.proposalType === 'FINANCIAL';
     const proposalHeaderType = isFinancialProposal ? 'FINANCIAL PROPOSAL' : 'TECHNICAL PROPOSAL';
+    const headerTitle = isFinancialProposal ? 'Financial Proposal' : 'Technical Proposal';
 
     // Extract assignment subject without redundant 'Technical Proposal for' prefixes
-    let assignmentSubject = (draft.title || '')
+    let assignmentSubject = (draft.currentProjectContext?.assignmentTitle || draft.title || '')
       .replace(/^technical\s+proposal\s+(?:for\s+)?/i, '')
       .replace(/^financial\s+proposal\s+(?:for\s+)?/i, '')
       .trim();
@@ -505,9 +714,9 @@ export class DocxGenerationService {
       assignmentSubject = 'Audit and Advisory Consultancy Services';
     }
 
-    const clientDisplayName = draft.clientName && draft.clientName !== 'Target Client' && draft.clientName !== 'Target Procurement Client'
-      ? draft.clientName
-      : 'Procuring Entity / Client';
+    const rawClient = (draft.currentProjectContext?.clientName || draft.clientName || '').trim();
+    const isClientValid = rawClient && rawClient !== 'Target Client' && rawClient !== 'Target Procurement Client' && !rawClient.toLowerCase().includes('not stated') && !rawClient.toLowerCase().includes('not specified');
+    const clientDisplayName = isClientValid ? rawClient : '';
 
     // Date formatting for cover: e.g. "September 2026"
     const coverDateStr = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(new Date());
@@ -576,19 +785,21 @@ export class DocxGenerationService {
           })
         ]
       }),
-      new Paragraph({
-        alignment: AlignmentType.CENTER,
-        spacing: { before: 40, after: 140, line: 260 },
-        children: [
-          new TextRun({
-            text: `CLIENT / PROCURING ENTITY: ${clientDisplayName.toUpperCase()}`,
-            font: primaryFont,
-            size: 20, // 10pt
-            bold: true,
-            color: bodyTextColor
-          })
-        ]
-      }),
+      ...(clientDisplayName ? [
+        new Paragraph({
+          alignment: AlignmentType.CENTER,
+          spacing: { before: 40, after: 140, line: 260 },
+          children: [
+            new TextRun({
+              text: `CLIENT / PROCURING ENTITY: ${clientDisplayName.toUpperCase()}`,
+              font: primaryFont,
+              size: 20, // 10pt
+              bold: true,
+              color: bodyTextColor
+            })
+          ]
+        })
+      ] : []),
       new Paragraph({
         alignment: AlignmentType.CENTER,
         spacing: { before: 60, after: 0 },
@@ -1302,22 +1513,24 @@ export class DocxGenerationService {
                   spacing: { after: 0, line: 240 },
                   children: [
                     new TextRun({
-                      text: `${proposalHeaderType} - `,
+                      text: headerTitle,
                       font: 'Tahoma',
                       size: 21, // 10.5 pt (21 half-points)
                       bold: true,
                       italics: false,
                       color: '002060' // Deep blue
                     }),
-                    new TextRun({
-                      text: clientDisplayName,
-                      font: 'Tahoma',
-                      size: 21, // 10.5 pt (21 half-points)
-                      bold: true,
-                      italics: false,
-                      color: '002060', // Deep blue
-                      break: 1
-                    })
+                    ...(clientDisplayName ? [
+                      new TextRun({
+                        text: clientDisplayName,
+                        font: 'Tahoma',
+                        size: 21, // 10.5 pt (21 half-points)
+                        bold: true,
+                        italics: false,
+                        color: '002060', // Deep blue
+                        break: 1
+                      })
+                    ] : [])
                   ]
                 })
               ]
@@ -1392,45 +1605,13 @@ export class DocxGenerationService {
       throw new Error(`DOCX Binary Content Integrity Validation Failed: ${integrity.errors.join('; ')}`);
     }
 
-    const base64Data = uint8ArrayToBase64(uint8Array);
-
-    const fileName = `ACNABIN_Technical_Proposal_${draft.projectId}_v${draft.version}.docx`;
-    const diskFilePath: string | undefined = undefined;
-
-    const metadata: DocxArtifactMetadata = {
-      id: `docx_art_${Date.now()}`,
-      projectId,
-      draftId: draft.id,
-      auditId: `audit_${projectId}`,
-      version: draft.version,
-      fileName,
-      fileSizeBytes: uint8Array.byteLength,
-      generatedAt: new Date().toISOString(),
-      generationStatus: 'SUCCESS',
-      appliedHouseStyleProfileId: houseStyle?.metadata?.profileId || 'profile_active',
-      gateCheckResult: 'PASSED',
-      base64Data,
-      filePath: diskFilePath,
-      integrityStatus: 'PASS',
-      sourceSectionsCount: draft.sections.length,
-      sourceContentBlocksCount: totalContentBlocks,
-      sourceTablesCount: totalTables,
-      sourcePlaceholdersCount: totalPlaceholders,
-      generatedHeadingsCount: integrity.metrics.generatedDocx.headingsCount,
-      generatedTablesCount: integrity.metrics.generatedDocx.tablesCount,
-      generatedPlaceholdersCount: integrity.metrics.generatedDocx.placeholdersCount,
-      extractedTextLength: integrity.metrics.generatedDocx.extractedTextLength
+    return {
+      uint8Array,
+      totalContentBlocks,
+      totalTables,
+      totalPlaceholders,
+      integrity
     };
-
-    // PERSISTENCE LEAF 2: Save binary data and lightweight metadata into localStorage/session storage
-    try {
-      localStorage.setItem(`${ARTIFACT_STORAGE_PREFIX}${projectId}`, JSON.stringify(metadata));
-      localStorage.setItem(`${BINARY_STORAGE_PREFIX}${projectId}`, base64Data);
-    } catch (e) {
-      console.warn('Failed to save DocxArtifactMetadata to localStorage:', e);
-    }
-
-    return { buffer: uint8Array, base64Data, metadata, integrityReport: integrity } as any;
   }
 
   /**

@@ -1,4 +1,4 @@
-import { Requirement, TorKnowledgeModel, RequirementCategory, TorSubmissionRecipient, RequirementClassification } from '../types';
+import { Requirement, TorKnowledgeModel, RequirementCategory, TorSubmissionRecipient, RequirementClassification, CurrentProjectContext, ProjectVerificationStatus } from '../types';
 import { MarkdownNormalizer, NormalizationResult } from './markdownNormalizer';
 import { AiService } from './aiService';
 
@@ -9,10 +9,11 @@ export interface QuickTorAnalysisResult {
   normalization: NormalizationResult;
   torModel: TorKnowledgeModel;
   requirements: Partial<Requirement>[];
+  currentProjectContext: CurrentProjectContext;
   overview: {
-    client: string;
+    client?: string;
     assignment: string;
-    deadline: string;
+    deadline?: string;
     duration: string;
     location: string;
     submissionMethod: string;
@@ -70,16 +71,23 @@ export class TorAnalysisValidator {
     let totalEvaluatedFields = 0;
     const lowerSource = sourceMarkdown.toLowerCase();
 
-    // Helper: checks if text exists in source
+    // Robust Source Grounding Helper: verifies candidate against source text with normalization & entity token matching
     const isGroundedinSource = (snippet: string | undefined | null): boolean => {
       if (!snippet || snippet.trim().length === 0) return false;
       const clean = snippet.toLowerCase().trim().replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ');
-      if (clean.length < 3) return false;
+      if (clean.length < 2) return false;
+      if (lowerSource.includes(clean)) return true;
+
+      // Check for acronym matches or significant word subsets
       const words = clean.split(' ').filter(w => w.length > 2);
       if (words.length === 0) return false;
-      if (lowerSource.includes(clean)) return true;
-      const matched = words.filter(w => lowerSource.includes(w));
-      return (matched.length / words.length) >= 0.7;
+      
+      const matchedCount = words.filter(w => lowerSource.includes(w)).length;
+      // Allow grounding if at least 50% of substantial words or all words >= 4 chars exist in source
+      if ((matchedCount / words.length) >= 0.5) return true;
+      if (words.length >= 2 && words.every(w => w.length < 4 ? true : lowerSource.includes(w))) return true;
+
+      return false;
     };
 
     // 1. Validate Assignment Title
@@ -92,23 +100,23 @@ export class TorAnalysisValidator {
         groundedFieldsCount++;
       } else {
         validTitle = fileName.replace(/\.[^/.]+$/, '').replace(/_/g, ' ');
-        warnings.push('Assignment title not explicitly identified as a heading; defaulted to clean document filename.');
+        warnings.push('Assignment title not explicitly identified as a heading; using clean document filename.');
       }
     } else {
       groundedFieldsCount++;
     }
 
-    // 2. Validate Client / Contracting Entity
+    // 2. Validate Client / Contracting Entity (Current ToR source only, no sample fallbacks)
     totalEvaluatedFields++;
     let validClient = model.assignmentContext?.client?.trim();
     if (!validClient || validClient.toLowerCase().includes('procurement authority') || !isGroundedinSource(validClient)) {
-      const clientMatch = sourceMarkdown.match(/(?:client|contracting\s+authority|issuing\s+organization|procuring\s+entity|organization|authority)[:\s]+([^\n.,]{3,80})/i);
+      const clientMatch = sourceMarkdown.match(/(?:client|contracting\s+authority|issuing\s+organization|procuring\s+entity|organization|authority|for\s+the\s+benefit\s+of|commissioned\s+by|employer)[:\s]+([^\n.,]{3,80})/i);
       if (clientMatch && isGroundedinSource(clientMatch[1])) {
         validClient = clientMatch[1].trim();
         groundedFieldsCount++;
       } else {
-        validClient = 'Not stated in TOR';
-        warnings.push('Client / Contracting entity is not explicitly named in the TOR document.');
+        validClient = undefined;
+        warnings.push('Client / Contracting entity could not be definitively grounded in current TOR document.');
       }
     } else {
       groundedFieldsCount++;
@@ -123,7 +131,7 @@ export class TorAnalysisValidator {
         validDeadline = subDeadlineMatch[1].trim();
         groundedFieldsCount++;
       } else {
-        validDeadline = 'Not stated in TOR';
+        validDeadline = undefined;
         warnings.push('Submission deadline is not explicitly declared in the TOR.');
       }
     } else {
@@ -320,10 +328,38 @@ export class TorAnalysisService {
       version: '1.0'
     };
 
+    const isClientGrounded = !!enhancedModel.assignmentContext?.client && validation.groundedFieldsCount > 0;
+    const resolvedClient = enhancedModel.assignmentContext?.client || undefined;
+    const resolvedTitle = enhancedModel.assignmentContext?.title || fileName.replace(/\.[^/.]+$/, '').replace(/_/g, ' ');
+    const resolvedDeadline = enhancedModel.submission?.deadline || undefined;
+
+    const currentProjectContext: CurrentProjectContext = {
+      clientName: resolvedClient || null,
+      procuringEntity: enhancedModel.assignmentContext?.client || null,
+      assignmentTitle: resolvedTitle || null,
+      tenderReference: enhancedModel.assignmentContext?.refNumber || null,
+      submissionDeadline: resolvedDeadline || null,
+      submissionEmail: enhancedModel.submission?.email || null,
+      submissionAddress: enhancedModel.submission?.address || null,
+      proposalType: 'TECHNICAL',
+      currentToRDocument: {
+        fileName,
+        fileSizeMb,
+        rawMarkdown: text
+      },
+      currentProjectDocuments: [fileName],
+      verificationStatus: resolvedClient ? 'VERIFIED' : 'REVIEW_REQUIRED',
+      sourceGrounding: {
+        clientConfidence: resolvedClient ? 0.95 : 0.0,
+        isSourceGrounded: isClientGrounded,
+        rejectionReason: resolvedClient ? undefined : 'Client name could not be definitively grounded in current ToR source text.'
+      }
+    };
+
     const overview = {
-      client: enhancedModel.assignmentContext.client || 'Not stated in TOR',
-      assignment: enhancedModel.assignmentContext.title || fileName.replace(/\.[^/.]+$/, '').replace(/_/g, ' '),
-      deadline: enhancedModel.submission.deadline || 'Not stated in TOR',
+      client: resolvedClient,
+      assignment: resolvedTitle,
+      deadline: resolvedDeadline,
       duration: enhancedModel.timeline.durationMonths || 'Not specified',
       location: enhancedModel.assignmentContext.location || 'Not specified',
       submissionMethod: enhancedModel.submission.method || 'Not specified in TOR',
@@ -369,6 +405,7 @@ export class TorAnalysisService {
       normalization: normResult,
       torModel: enhancedModel,
       requirements: extractedReqs,
+      currentProjectContext,
       overview,
       keyRequirements,
       complianceSnapshot,
@@ -902,7 +939,7 @@ export class TorAnalysisService {
   private static mergeModels(det: TorKnowledgeModel, llm: TorKnowledgeModel): TorKnowledgeModel {
     return {
       assignmentContext: {
-        client: (llm.assignmentContext?.client && llm.assignmentContext.client !== 'Not stated in TOR') ? llm.assignmentContext.client : det.assignmentContext.client,
+        client: (llm.assignmentContext?.client && llm.assignmentContext.client.trim().length > 1) ? llm.assignmentContext.client.trim() : det.assignmentContext.client,
         funder: llm.assignmentContext?.funder || det.assignmentContext.funder,
         refNumber: llm.assignmentContext?.refNumber || det.assignmentContext.refNumber,
         title: (llm.assignmentContext?.title && llm.assignmentContext.title.length > 5) ? llm.assignmentContext.title : det.assignmentContext.title,
@@ -957,7 +994,7 @@ export class TorAnalysisService {
       submission: {
         ...det.submission,
         ...llm.submission,
-        deadline: (llm.submission?.deadline && llm.submission.deadline !== 'Not stated in TOR') ? llm.submission.deadline : det.submission.deadline,
+        deadline: (llm.submission?.deadline && llm.submission.deadline.trim().length > 1) ? llm.submission.deadline.trim() : det.submission.deadline,
         method: llm.submission?.method || det.submission.method,
         email: llm.submission?.email || det.submission.email
       },

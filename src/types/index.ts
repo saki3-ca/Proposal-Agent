@@ -1117,6 +1117,32 @@ export interface ProposalDraftSection {
   updatedAt: string;
 }
 
+export type ProjectVerificationStatus = 'VERIFIED' | 'REVIEW_REQUIRED' | 'NOT_FOUND' | 'BLOCKED';
+
+export interface CurrentProjectContext {
+  clientName: string | null;
+  procuringEntity?: string | null;
+  assignmentTitle: string | null;
+  tenderReference?: string | null;
+  submissionDeadline?: string | null;
+  submissionEmail?: string | null;
+  submissionAddress?: string | null;
+  proposalType: 'TECHNICAL' | 'FINANCIAL';
+  currentToRDocument?: {
+    fileName: string;
+    fileSizeMb?: number;
+    rawMarkdown?: string;
+  };
+  currentProjectDocuments: string[];
+  verificationStatus: ProjectVerificationStatus;
+  sourceGrounding?: {
+    clientConfidence: number;
+    isSourceGrounded: boolean;
+    matchedSnippets?: string[];
+    rejectionReason?: string;
+  };
+}
+
 export interface ProposalDraft {
   id: string;
   projectId: string;
@@ -1124,6 +1150,7 @@ export interface ProposalDraft {
   status: ProposalDraftStatus;
   title: string;
   clientName?: string;
+  currentProjectContext?: CurrentProjectContext;
   recipient?: TorSubmissionRecipient;
   submissionNumber?: string;
   proposalReferenceYear?: string;

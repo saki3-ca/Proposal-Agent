@@ -309,15 +309,7 @@ Internally classify every statement into one of the following 7 categories:
 7. UNSUPPORTED_CLAIM — NEVER generate unverified marketing claims or invented professional descriptions ("seasoned legal drafting experts", "four decades of unmatched excellence", "Senior Partner specializing in...").
 
 HARD SCOPE EXCLUSIONS (MANDATORY BOUNDARIES):
-Do NOT commit to or include any of the following explicit TOR exclusions in Scope, Methodology, Work Plan, Deliverables, Timeline, or Conclusion:
-1. Internal governance, policies, or management of individual member organizations.
-2. Donor-specific programme agreements, sub-grant contracts, or funding proposals.
-3. Detailed financial manuals, accounting systems, or audit frameworks for YFC-BD or member organizations.
-4. Human resource policies for the Secretariat or member organizations.
-5. Fundraising strategy or donor engagement plans for BYC.
-6. Legal incorporation of BYC as a separate registered entity.
-7. Implementation, rollout, signing facilitation, or training on the MoU after delivery.
-8. Individual capacity assessments of member organizations.
+Do NOT commit to or include any activities that fall outside the explicit TOR scope of services. Strictly adhere to the stated scope of work and deliverables mandated in the TOR.
 
 LETTER OF SUBMISSION RULE:
 * Refer to the actual assignment title "${contextPkg.assignmentTitle}", NEVER use the section title "Letter of Submission".
@@ -672,14 +664,18 @@ Generate the structured proposal blocks now as JSON array.`;
     const secType = contextPkg.sectionType;
     const titleLower = contextPkg.sectionTitle.toLowerCase();
     const rawClient = (contextPkg.clientName || '').trim();
-    const client = rawClient && rawClient !== 'Target Client' && rawClient !== 'Target Procurement Client' && !rawClient.toLowerCase().includes('not stated') && !rawClient.toLowerCase().includes('not specified')
-      ? rawClient
-      : 'Bangladesh Youth Coalition (BYC)';
-    const assignmentRaw = contextPkg.assignmentTitle && contextPkg.assignmentTitle !== 'the assignment' && contextPkg.assignmentTitle !== 'ACNABIN Technical Proposal Draft' && !contextPkg.assignmentTitle.toLowerCase().includes('not stated')
-      ? contextPkg.assignmentTitle
-      : `Strengthening the Governance and Institutional Framework of ${client}`;
+    const isClientValid = rawClient && rawClient !== 'Target Client' && rawClient !== 'Target Procurement Client' && !rawClient.toLowerCase().includes('not stated') && !rawClient.toLowerCase().includes('not specified');
+    const client = isClientValid ? rawClient : '[Client Name To Be Confirmed]';
+    
+    const rawAssignment = (contextPkg.assignmentTitle || '').trim();
+    const isAssignmentValid = rawAssignment && rawAssignment !== 'the assignment' && rawAssignment !== 'ACNABIN Technical Proposal Draft' && !rawAssignment.toLowerCase().includes('not stated') && !rawAssignment.toLowerCase().includes('not specified');
+    const assignmentRaw = isAssignmentValid
+      ? rawAssignment
+      : (isClientValid ? `Consultancy and Advisory Services for ${client}` : '[Assignment Title To Be Confirmed]');
+      
     const assignmentClause = assignmentRaw.replace(/^(Consultancy\s+(Services\s+)?(for\s+)?)/i, '');
-    const assignmentText = assignmentClause ? assignmentClause.charAt(0).toLowerCase() + assignmentClause.slice(1) : `strengthening the governance and institutional framework of ${client}`;
+    const assignmentText = assignmentClause ? assignmentClause.charAt(0).toLowerCase() + assignmentClause.slice(1) : assignmentRaw;
+    const defaultReviewStatus: BlockReviewStatus = (isClientValid && isAssignmentValid) ? 'AI_GENERATED' : 'FLAGGED';
 
     // 1. Cover Page
     if (secType === 'COVER' || titleLower.includes('cover')) {
@@ -695,8 +691,8 @@ Generate the structured proposal blocks now as JSON array.`;
       const submittedToBlock = `Submitted to:\n${submittedToLines.join('\n')}`;
 
       blocks.push(
-        { id: `blk_c2_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `for\n\n${assignmentRaw}`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_c3_${Date.now()}`, type: 'PARAGRAPH', order: 3, content: submittedToBlock, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_c2_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `for\n\n${assignmentRaw}`, confidence: 0.95, reviewStatus: defaultReviewStatus },
+        { id: `blk_c3_${Date.now()}`, type: 'PARAGRAPH', order: 3, content: submittedToBlock, confidence: 0.95, reviewStatus: defaultReviewStatus },
         { id: `blk_c4_${Date.now()}`, type: 'PARAGRAPH', order: 4, content: `Submitted by:\nACNABIN, Chartered Accountants\nAn Independent Member Firm of Baker Tilly International\nBDBL Bhaban (Level-13 & 15), 12 Kawran Bazar Commercial Area, Dhaka-1215`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
         { id: `blk_c5_${Date.now()}`, type: 'HEADING', order: 5, content: 'Contact Info', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
         { id: `blk_c6_${Date.now()}`, type: 'PARAGRAPH', order: 6, content: `Primary Contact:\nAbdullah-Al-Mamun, FCA\nDirector, Audit & Consultancy\nACNABIN, Chartered Accountants\nmamun.abdullah@acnabin-bd.com\n+8801915561888`, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
@@ -737,14 +733,14 @@ Generate the structured proposal blocks now as JSON array.`;
       const recipientDisplayName = recipient?.organization || client;
 
       blocks.push(
-        { id: `blk_l1_${Date.now()}`, type: 'PARAGRAPH', order: 1, content: refNumber, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_l2_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: recipientBlockLines.join('\n'), confidence: 0.95, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_l1_${Date.now()}`, type: 'PARAGRAPH', order: 1, content: refNumber, confidence: 1.0, reviewStatus: defaultReviewStatus },
+        { id: `blk_l2_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: recipientBlockLines.join('\n'), confidence: 0.95, reviewStatus: defaultReviewStatus },
         { id: `blk_l3_${Date.now()}`, type: 'PARAGRAPH', order: 3, content: 'Date:', confidence: 1.0, reviewStatus: 'AI_GENERATED' },
         { id: `blk_l4_${Date.now()}`, type: 'PARAGRAPH', order: 4, content: 'Dear Sir/Madam,', confidence: 1.0, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_l5_${Date.now()}`, type: 'PARAGRAPH', order: 5, content: `We, the undersigned, offer to provide consultancy services for ${assignmentText}, in accordance with the Terms of Reference issued by ${recipientDisplayName} and our enclosed Technical Proposal. Our Financial Proposal is submitted separately in accordance with the submission instructions.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_l6_${Date.now()}`, type: 'PARAGRAPH', order: 6, content: `If our Proposal is accepted, we undertake to commence the assignment within the timeframe agreed with ${recipientDisplayName} following formal engagement, and our Proposal shall remain binding upon us throughout the validity period.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_l7_${Date.now()}`, type: 'PARAGRAPH', order: 7, content: `We confirm that, to the best of our knowledge, no actual or potential conflict of interest exists between ACNABIN and ${client} or its member organizations. A formal Declaration of No Conflict of Interest is enclosed as an appendix to this Proposal.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_l8_${Date.now()}`, type: 'PARAGRAPH', order: 8, content: `We understand that ${recipientDisplayName} is not bound to accept any proposal it receives, and we accept ${recipientDisplayName}'s right to modify the terms of engagement, revise the scope of work, or cancel this procurement process without assigning any reason, subject to applicable internal procedures.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_l5_${Date.now()}`, type: 'PARAGRAPH', order: 5, content: `We, the undersigned, offer to provide professional consultancy services for ${assignmentText}, in accordance with the Terms of Reference issued by ${recipientDisplayName} and our enclosed Technical Proposal. Our Financial Proposal is submitted separately in accordance with the prescribed submission instructions.`, confidence: 0.95, reviewStatus: defaultReviewStatus },
+        { id: `blk_l6_${Date.now()}`, type: 'PARAGRAPH', order: 6, content: `If our Proposal is accepted, we undertake to commence the assignment within the timeframe agreed with ${recipientDisplayName} following formal contract execution, and our Proposal shall remain binding upon us throughout the stipulated validity period.`, confidence: 0.95, reviewStatus: defaultReviewStatus },
+        { id: `blk_l7_${Date.now()}`, type: 'PARAGRAPH', order: 7, content: `We confirm that, to the best of our knowledge, no actual or potential conflict of interest exists between ACNABIN and ${client}. A formal Declaration of Independence and No Conflict of Interest is maintained in accordance with professional ethical standards.`, confidence: 0.95, reviewStatus: defaultReviewStatus },
+        { id: `blk_l8_${Date.now()}`, type: 'PARAGRAPH', order: 8, content: `We understand that ${recipientDisplayName} is not bound to accept any proposal received, and we respect ${recipientDisplayName}'s right to amend terms of engagement, revise the scope of work, or cancel this procurement process in accordance with applicable rules.`, confidence: 0.95, reviewStatus: defaultReviewStatus },
         { id: `blk_l9_${Date.now()}`, type: 'PARAGRAPH', order: 9, content: `Yours sincerely,\n\nOn behalf of ACNABIN, Chartered Accountants\n\nMuhammad Aminul Hoque, FCA\nPartner\nACNABIN, Chartered Accountants\nBDBL Bhaban (Level-13 & 15), 12 Kawran Bazar Commercial Area, Dhaka-1215`, confidence: 1.0, reviewStatus: 'AI_GENERATED' }
       );
       return blocks;
@@ -765,15 +761,15 @@ Generate the structured proposal blocks now as JSON array.`;
           id: `blk_exec1_${Date.now()}`,
           type: 'PARAGRAPH',
           order: 2,
-          content: `${client} brings together youth-led organizations across Bangladesh to collaborate on shared strategic priorities. To support its continued growth and enhance institutional credibility, ${client} requires a comprehensive, signature-ready governance and operational framework. This assignment addresses the transition from preliminary operational arrangements to a formalized, sustainable institutional structure that clarifies roles, safeguards member independence, and strengthens accountability.`,
+          content: `${client} has issued this procurement request for "${assignmentRaw}". To ensure the successful execution of this assignment, ${client} requires rigorous technical competence, adherence to professional standards, and demonstrable quality assurance. This proposal presents ACNABIN's tailored technical methodology, work plan, multidisciplinary team, and quality management framework designed to meet all objectives outlined in the Terms of Reference.`,
           confidence: 0.95,
-          reviewStatus: 'AI_GENERATED'
+          reviewStatus: defaultReviewStatus
         },
         {
           id: `blk_exec2_${Date.now()}`,
           type: 'PARAGRAPH',
           order: 3,
-          content: `ACNABIN understands that the assignment requires the development of one cohesive, integrated governance suite consisting of a core Memorandum of Understanding (MoU) and eight supporting annexures. These instruments cover governance architecture, Executive Committee election and accountability arrangements, Secretariat administrative duties and limits, membership categories and rights, financial governance and resource management, communication and coordination protocols, operational routines and risk management, and safeguarding, integrity, and ethical conduct standards.`,
+          content: `ACNABIN's technical approach is structured across defined engagement phases: Inception and Initial Diagnostic Scoping, Core Fieldwork and Substantive Analysis, Stakeholder Consultations and Deliverable Drafting, and Comprehensive Quality Review and Close-out Reporting. This structured workflow ensures transparent milestone tracking, rigorous factual verification, and actionable deliverable outputs.`,
           confidence: 0.95,
           reviewStatus: 'AI_GENERATED'
         },
@@ -781,23 +777,7 @@ Generate the structured proposal blocks now as JSON array.`;
           id: `blk_exec3_${Date.now()}`,
           type: 'PARAGRAPH',
           order: 4,
-          content: `ACNABIN proposes a structured, participatory 12-week consulting engagement organized into five distinct phases: Inception and Diagnostic Document Review, Core Governance Architecture (Annexures 1 & 2), Administrative and Financial Governance (Annexures 3, 4 & 5), Operational and Safeguarding Protocols (Annexures 6, 7 & 8), and Cross-Document Consistency Review and Close-out Reporting. Key Informant Interviews (KIIs) and consultations will be conducted across member organizations in all administrative divisions, ensuring that every governance provision is grounded in operational reality and supported by broad stakeholder consensus.`,
-          confidence: 0.95,
-          reviewStatus: 'AI_GENERATED'
-        },
-        {
-          id: `blk_exec4_${Date.now()}`,
-          type: 'PARAGRAPH',
-          order: 5,
-          content: `The primary outputs delivered under this assignment will be a fully signable MoU package with cross-referenced annexures, a comprehensive Feedback and Revision Matrix documenting stakeholder feedback resolution, and a Final Consultancy Report with an actionable policy roadmap for future institutional development.`,
-          confidence: 0.95,
-          reviewStatus: 'AI_GENERATED'
-        },
-        {
-          id: `blk_exec5_${Date.now()}`,
-          type: 'PARAGRAPH',
-          order: 6,
-          content: `ACNABIN, Chartered Accountants, established in 1985 and an independent member firm of Baker Tilly International, brings extensive institutional advisory, internal control review, and financial governance experience in Bangladesh. Our multidisciplinary engagement team combines chartered accountants and governance advisory specialists to deliver rigorous, actionable, and consensus-driven outputs.`,
+          content: `ACNABIN, Chartered Accountants, established in 1985 and an independent member firm of Baker Tilly International, brings extensive professional advisory, audit, and institutional assessment experience in Bangladesh. Our proposed engagement team combines senior chartered accountants and technical domain specialists to deliver robust, compliant, and timely results.`,
           confidence: 0.95,
           reviewStatus: 'AI_GENERATED'
         }
@@ -805,107 +785,93 @@ Generate the structured proposal blocks now as JSON array.`;
       return blocks;
     }
 
-    // 5. Section 1: Understanding of the Assignment and the Client
+    // 5. Understanding of the Assignment and the Client
     if (titleLower.includes('understanding of')) {
       blocks.push(
         { id: `blk_und2_${Date.now()}`, type: 'HEADING', order: 2, content: '1.1 Understanding of the Assignment', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_und3_${Date.now()}`, type: 'PARAGRAPH', order: 3, content: `ACNABIN understands that ${client} is transitioning from preliminary working arrangements toward a formalized, sustainable institutional structure. To support long-term collaboration among diverse member organizations, the network requires a cohesive, signature-ready governance suite that establishes clear decision-making processes, transparent accountability, and unambiguous operational boundaries while strictly safeguarding member organizations\' legal and programmatic autonomy.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_und4_${Date.now()}`, type: 'PARAGRAPH', order: 4, content: `The assignment requires developing one unified, integrated package — not an uncoordinated collection of standalone policies — comprising a core Memorandum of Understanding (MoU) and eight supporting annexures. The governance package must provide clarity over: (1) governing authority and democratic leadership transitions; (2) member rights, categories, and due diligence; (3) Secretariat administrative duties and strict operational limits; (4) financial governance and resource stewardship; (5) internal and external communication rules; (6) routine operations and multi-tier grievance redress; and (7) youth safeguarding, integrity, and ethical conduct. To achieve broad institutional ownership, the drafting process must incorporate structured document review, multi-regional stakeholder consultations, and phased validation across three deliverable batches.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_und5_${Date.now()}`, type: 'HEADING', order: 5, content: '1.2 Understanding of the Client', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_und6_${Date.now()}`, type: 'PARAGRAPH', order: 6, content: `${client} functions as a national youth coalition and institutional anchor for member organizations across Bangladesh. ACNABIN recognizes that the Secretariat\'s role is to provide operational coordination and administrative facilitation, rather than to establish hierarchical control over member entities. Member organizations preserve their independent legal status and programmatic sovereign identity, entering into mutual collaboration on shared priorities.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_und7_${Date.now()}`, type: 'PARAGRAPH', order: 7, content: `Given the diversity of member organizations across all eight administrative divisions and varying institutional capacities, the governance framework must be practical, transparent, and readily operationalizable. It must reinforce a youth-led, accountable, non-partisan ethos while establishing enforceable safeguarding and ethical standards.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' }
+        { id: `blk_und3_${Date.now()}`, type: 'PARAGRAPH', order: 3, content: `ACNABIN has conducted a thorough review of the Terms of Reference for "${assignmentRaw}". We understand that the primary purpose of this consultancy is to deliver objective, evidence-based, and standards-compliant services that directly fulfill the requirements and operational objectives established by ${client}.`, confidence: 0.95, reviewStatus: defaultReviewStatus },
+        { id: `blk_und4_${Date.now()}`, type: 'HEADING', order: 4, content: '1.2 Understanding of the Client Context', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_und5_${Date.now()}`, type: 'PARAGRAPH', order: 5, content: `ACNABIN recognizes ${client}'s operational mandate, regulatory environment, and institutional priorities. Our proposed execution strategy is designed to ensure seamless coordination with designated focal points, minimize operational disruption, and ensure full compliance with the client's internal procedures and governing standards.`, confidence: 0.95, reviewStatus: defaultReviewStatus }
       );
       return blocks;
     }
 
-    // 7. Section 2: Objectives of the Assignment
+    // 6. Objectives of the Assignment
     if (titleLower.includes('objective')) {
+      const objReqs = (contextPkg.mappedRequirements || []).filter(r => r.category.toLowerCase().includes('objective') || r.category.toLowerCase().includes('technical'));
+      const objItems = objReqs.length > 0
+        ? objReqs.map(r => r.requirementText)
+        : [
+            `Execute the scope of services for "${assignmentRaw}" in full compliance with the Terms of Reference.`,
+            `Perform thorough diagnostic analysis, fieldwork, and stakeholder consultations as mandated.`,
+            `Deliver all required milestone reports and final deliverables within agreed timelines.`
+          ];
+
       blocks.push(
-        { id: `blk_obj2_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `In accordance with the Terms of Reference issued by ${client}, ACNABIN will execute the consultancy assignment to achieve the following specific objectives:`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_obj3_${Date.now()}`, type: 'BULLET_LIST', order: 3, content: 'Conduct a comprehensive diagnostic review of existing foundational documents, meeting decisions, preliminary terms, and national and international coalition reference models to identify elements to retain, refine, or introduce.', confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_obj4_${Date.now()}`, type: 'BULLET_LIST', order: 4, content: 'Formulate a formal, signature-ready Memorandum of Understanding (MoU) establishing the legal foundation, core values, and operational principles governing coalition collaboration.', confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_obj5_${Date.now()}`, type: 'BULLET_LIST', order: 5, content: 'Develop an integrated suite of eight (8) operational and governance annexures establishing unambiguous authority, transparent decision-making, and robust administrative protocols.', confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_obj6_${Date.now()}`, type: 'BULLET_LIST', order: 6, content: 'Establish clear Executive Committee election regulations, accountability standards, and transition protocols to ensure democratic, youth-led governance.', confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_obj7_${Date.now()}`, type: 'BULLET_LIST', order: 7, content: 'Delineate Secretariat duties and administrative boundaries, ensuring administrative efficiency while strictly safeguarding member organizations\' legal and programmatic independence.', confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_obj8_${Date.now()}`, type: 'BULLET_LIST', order: 8, content: 'Define transparent membership categories, admission criteria, participatory rights, responsibilities, and fair dispute resolution and exit procedures.', confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_obj9_${Date.now()}`, type: 'BULLET_LIST', order: 9, content: 'Formulate a robust financial governance framework for joint project budgeting, fund handling, spending authorizations, and reporting, explicitly ring-fencing ordinary membership from financial liabilities.', confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_obj10_${Date.now()}`, type: 'BULLET_LIST', order: 10, content: 'Establish comprehensive protocols for external communication, media representation, branding, operational routines, and risk management.', confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_obj11_${Date.now()}`, type: 'BULLET_LIST', order: 11, content: 'Incorporate mandatory child and youth safeguarding standards, protection from sexual exploitation and abuse (PSEA), and anti-harassment codes of conduct.', confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_obj12_${Date.now()}`, type: 'BULLET_LIST', order: 12, content: 'Deliver a structured, phased validation process across three drafting batches, supported by a formal Feedback and Revision Matrix and a Final Consultancy Roadmap for long-term policy development.', confidence: 0.95, reviewStatus: 'AI_GENERATED' }
+        { id: `blk_obj2_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `In accordance with the Terms of Reference issued by ${client}, ACNABIN will execute the consultancy assignment to achieve the following core objectives:`, confidence: 0.95, reviewStatus: defaultReviewStatus },
+        ...objItems.map((item, idx) => ({
+          id: `blk_obj_${idx + 3}_${Date.now()}`,
+          type: 'BULLET_LIST' as ContentBlockType,
+          order: idx + 3,
+          content: item,
+          confidence: 0.95,
+          reviewStatus: defaultReviewStatus
+        }))
       );
       return blocks;
     }
 
-    // 8. Section 3: Scope of Work
+    // 7. Scope of Work
     if (titleLower.includes('scope of work') || (secType === 'TECHNICAL' && titleLower.includes('scope'))) {
+      const scopeReqs = (contextPkg.mappedRequirements || []).filter(r => r.category.toLowerCase().includes('scope') || r.category.toLowerCase().includes('deliverable') || r.category.toLowerCase().includes('technical'));
+      const scopeItems = scopeReqs.length > 0
+        ? scopeReqs.map(r => r.requirementText)
+        : [
+            'Inception, document review, and diagnostic methodology finalization.',
+            'Detailed fieldwork, data gathering, analysis, and verification of records.',
+            'Draft deliverable preparation and presentation to client management.',
+            'Incorporation of review feedback and submission of final approved deliverables.'
+          ];
+
       blocks.push(
-        { id: `blk_scp2_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `ACNABIN's proposed scope of work is organized into an integrated, modular framework addressing all specific requirements set out in the Terms of Reference. For each substantive workstream, our consulting approach, analytical methods, concrete outputs, and contextual relevance are detailed below:`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_scp3_${Date.now()}`, type: 'HEADING', order: 3, content: '3.1 Inception, Document Review and Analytical Framework', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_scp4_${Date.now()}`, type: 'PARAGRAPH', order: 4, content: `ACNABIN will perform a diagnostic review of existing foundational ToRs, governance notes, meeting decisions, membership rosters, past election records, safeguarding policies, and relevant national and international coalition models. We will evaluate current practices against established non-profit governance standards, identifying gaps, ambiguities, and retention priorities. On this basis, we will issue an Inception Note confirming our detailed analytical framework, KII interview guides, stakeholder consultation matrix, drafting schedule, and information requirements.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_scp5_${Date.now()}`, type: 'HEADING', order: 5, content: '3.2 Key Informant Interviews (KII) and Multi-Regional Stakeholder Consultations', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_scp6_${Date.now()}`, type: 'PARAGRAPH', order: 6, content: `To ensure that the governance package reflects operational reality, ACNABIN will design and execute a stratified consultation process. We will conduct structured Key Informant Interviews (KIIs) and focus group consultations with Executive Committee leaders, Secretariat officers, regional member organizations across all administrative divisions, and youth representatives. This participatory input will provide qualitative evidence on practical governance bottlenecks, decision-making dynamics, and local operating realities.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_scp7_${Date.now()}`, type: 'HEADING', order: 7, content: '3.3 Core Governance Development Principles', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_scp8_${Date.now()}`, type: 'PARAGRAPH', order: 8, content: `All documents will be developed as one cohesive, interconnected suite adhering to six core development principles: (1) standardized definitions and uniform terminology across all instruments; (2) explicit, non-overlapping authority allocations; (3) strict protection of member organizations\' legal and organizational independence; (4) non-coercive Secretariat hosting rules; (5) explicit separation of ordinary coalition membership from financial liabilities; and (6) embedding youth-led safeguarding and ethical standards into every operational workflow.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_scp9_${Date.now()}`, type: 'HEADING', order: 9, content: '3.4 Annexure 1: Memorandum of Understanding (MoU) and Core Framework', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_scp10_${Date.now()}`, type: 'PARAGRAPH', order: 10, content: `The core MoU establishes the primary legal and institutional foundation for joint action without compromising member organizations\' separate legal identity or internal governance. ACNABIN will review foundational terms and coalition reference models to draft the primary, signature-ready MoU. The instrument will incorporate five integral annexes: Annex A (Governance Architecture defining governing bodies and mandates), Annex B (Member Collaboration Framework setting principles for joint action), Annex C (Decision-Making Framework defining quorum and consensus thresholds), Annex D (Roles & Accountability Matrix delineating responsibilities), and Annex E (Resource Stewardship Principles establishing financial prudence). The draft MoU will be submitted as Batch 1 for stakeholder review and validation.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_scp11_${Date.now()}`, type: 'HEADING', order: 11, content: '3.5 Annexure 2: Executive Committee Elections and Accountability Framework', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_scp12_${Date.now()}`, type: 'PARAGRAPH', order: 12, content: `Ensuring democratic legitimacy and youth leadership requires clear electoral regulations and transparent oversight. ACNABIN will formulate comprehensive election and accountability regulations structured in two parts: Part A (Election Framework) defining voter eligibility criteria, nomination and vetting procedures, voting modalities, dispute resolution protocols, and vacancy filling; and Part B (Accountability Framework) codifying duties of elected officers, meeting documentation standards, regular reporting to general members, performance reviews, and handover procedures. Specific election mechanisms and accountability thresholds will be developed through stakeholder consultation and validated in Validation Meeting 1.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_scp13_${Date.now()}`, type: 'HEADING', order: 13, content: '3.6 Annexure 3: Secretariat Duties, Authority and Operational Limits', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_scp14_${Date.now()}`, type: 'PARAGRAPH', order: 14, content: `The Secretariat must provide efficient operational and administrative coordination while preventing administrative overreach over sovereign member entities. ACNABIN will formulate clear Secretariat operating terms distinguishing day-to-day administrative hosting from executive decision-making. The framework will codify meeting coordination, record custody, donor communication support, and administrative services, while explicitly establishing that the Secretariat possesses no supervisory authority over member organizations\' internal affairs. Operational boundaries will be validated with Secretariat and member representatives in Validation Meeting 2.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_scp15_${Date.now()}`, type: 'HEADING', order: 15, content: '3.7 Annexure 4: Membership Categories, Rights, and Responsibilities', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_scp16_${Date.now()}`, type: 'PARAGRAPH', order: 16, content: `The membership framework must balance inclusive participation with clear eligibility, rights, and accountability. ACNABIN will review existing membership arrangements, assess relevant coalition models, consult member representatives, and develop a practical framework covering eligibility, classification categories, participation rights, responsibilities, due diligence, and procedures for withdrawal or suspension. Proposed classification options and criteria will be presented for stakeholder validation during Validation Meeting 2 before finalization.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_scp17_${Date.now()}`, type: 'HEADING', order: 17, content: '3.8 Annexure 5: Financial Governance and Resource Management Framework', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_scp18_${Date.now()}`, type: 'PARAGRAPH', order: 18, content: `Joint coalition activities require transparent budgeting and fund handling, yet ordinary coalition membership must be strictly ring-fenced from organizational debts, legal liabilities, or co-guarantees. ACNABIN\'s chartered accountants will design an institutional financial governance framework establishing transparent procedures for joint project budgeting, fund handling, expenditure authorizations, and periodic financial reporting. The instrument will embed clear legal and accounting separation confirming that ordinary membership does not impose any financial debt, liability, or co-guarantee on individual member organizations, subject to validation in Batch 2.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_scp19_${Date.now()}`, type: 'HEADING', order: 19, content: '3.9 Annexure 6: Communication, Representation, and Coordination Protocols', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_scp20_${Date.now()}`, type: 'PARAGRAPH', order: 20, content: `Maintaining a coherent, unified public voice and donor visibility requires clear rules that respect member organizations\' independent branding and designate authorized representatives. ACNABIN will formulate guidelines governing external advocacy, official media representation, designated spokesperson roles, joint branding and logo usage, donor visibility attribution, and internal communication channels. The protocol will be submitted as Batch 3 and validated with member representatives.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_scp21_${Date.now()}`, type: 'HEADING', order: 21, content: '3.10 Annexure 7: Day-to-Day Operations, Grievance Redress, and Risk Management', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_scp22_${Date.now()}`, type: 'PARAGRAPH', order: 22, content: `Operational routines must support smooth inter-member collaboration, resolve conflicts constructively, and mitigate institutional, financial, and reputational risks. ACNABIN will outline operational routines for routine coordination, thematic working group protocols, multi-tier confidential grievance redress mechanisms, and an institutional risk management matrix identifying governance, operational, and reputational risks alongside practical mitigation strategies, validated in Validation Meeting 3.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_scp23_${Date.now()}`, type: 'HEADING', order: 23, content: '3.11 Annexure 8: Safeguarding, Integrity, Independence, and Ethical Conduct', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_scp24_${Date.now()}`, type: 'PARAGRAPH', order: 24, content: `Protecting youth participants and establishing institutional integrity requires enforceable, universally accepted ethical standards. ACNABIN will formulate a comprehensive Code of Ethical Conduct and Safeguarding Policy covering child and youth protection, Protection from Sexual Exploitation and Abuse (PSEA), non-discrimination, anti-harassment, conflict of interest disclosure, and confidential reporting channels aligned with national and international standards, finalized with stakeholders in Batch 3.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_scp25_${Date.now()}`, type: 'HEADING', order: 25, content: '3.12 Phased Stakeholder Validation and Consensus Building', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_scp26_${Date.now()}`, type: 'PARAGRAPH', order: 26, content: `To build institutional ownership, ACNABIN will facilitate structured validation sessions across three deliverable batches. We will maintain an active Feedback and Revision Matrix logging every stakeholder comment, analytical appraisal, and agreed modification prior to deliverable finalization.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_scp27_${Date.now()}`, type: 'HEADING', order: 27, content: '3.13 Final Consultancy Report and Future Governance Roadmap', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_scp28_${Date.now()}`, type: 'PARAGRAPH', order: 28, content: `Upon completion of drafting, ACNABIN will submit a comprehensive close-out report synthesizing consultative findings, governance design rationales, implementation guidelines, and a phased roadmap for future policy development.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_scp29_${Date.now()}`, type: 'HEADING', order: 29, content: '3.14 Boundaries and Out of Scope', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_scp30_${Date.now()}`, type: 'BULLET_LIST', order: 30, content: 'Internal governance, policies, or management of individual member organizations.', confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_scp31_${Date.now()}`, type: 'BULLET_LIST', order: 31, content: 'Donor-specific programme agreements, sub-grant contracts, or funding proposals.', confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_scp32_${Date.now()}`, type: 'BULLET_LIST', order: 32, content: 'Detailed financial manuals, accounting systems, or audit frameworks for YFC-BD or member organizations.', confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_scp33_${Date.now()}`, type: 'BULLET_LIST', order: 33, content: 'Human resource policies for the Secretariat or member organizations.', confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_scp34_${Date.now()}`, type: 'BULLET_LIST', order: 34, content: 'Fundraising strategy or donor engagement plans for BYC.', confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_scp35_${Date.now()}`, type: 'BULLET_LIST', order: 35, content: 'Legal incorporation of BYC as a separate registered entity.', confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_scp36_${Date.now()}`, type: 'BULLET_LIST', order: 36, content: 'Implementation, rollout, signing facilitation, or training on the MoU after delivery.', confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_scp37_${Date.now()}`, type: 'BULLET_LIST', order: 37, content: 'Individual capacity assessments of member organizations.', confidence: 0.95, reviewStatus: 'AI_GENERATED' }
+        { id: `blk_scp2_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `ACNABIN's proposed scope of work directly addresses all specific requirements set out in the Terms of Reference for "${assignmentRaw}". Our substantive workstreams comprise:`, confidence: 0.95, reviewStatus: defaultReviewStatus },
+        ...scopeItems.map((item, idx) => ({
+          id: `blk_scp_${idx + 3}_${Date.now()}`,
+          type: 'BULLET_LIST' as ContentBlockType,
+          order: idx + 3,
+          content: item,
+          confidence: 0.95,
+          reviewStatus: defaultReviewStatus
+        }))
       );
       return blocks;
     }
 
-    // 9. Section 4: Proposed Methodology
+    // 8. Proposed Methodology
     if (secType === 'METHODOLOGY' || titleLower.includes('methodology')) {
       blocks.push(
-        { id: `blk_mth2_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `ACNABIN has structured its technical methodology to ensure that the resulting governance instruments reflect lived operational realities while adhering to established non-profit governance practices. The engagement is executed across five sequential phases, as detailed below:`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_mth3_${Date.now()}`, type: 'HEADING', order: 3, content: 'Phase 0: Inception, Evidence Review & Diagnostic Benchmarking (Weeks 1–2)', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_mth4_${Date.now()}`, type: 'PARAGRAPH', order: 4, content: `During this phase, ACNABIN will conduct an inception meeting with ${client} leadership, review foundational documents, and evaluate benchmark coalition models from Bangladesh and the international non-profit sector. We will formulate interview guides and stakeholder consultation plans, delivering an Inception Note that establishes the baseline architecture for the entire engagement.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_mth5_${Date.now()}`, type: 'HEADING', order: 5, content: 'Phase 1: Core Governance Architecture & Democratic Elections (Weeks 3–5)', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_mth6_${Date.now()}`, type: 'PARAGRAPH', order: 6, content: `ACNABIN will execute initial Key Informant Interviews (KIIs) and draft Batch 1 instruments: Annexure 1 (Core Memorandum of Understanding with Annexes A–E) and Annexure 2 (Executive Committee Elections and Accountability Framework). These drafts will be submitted and reviewed during Validation Meeting 1, with feedback logged in the Feedback and Revision Matrix.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_mth7_${Date.now()}`, type: 'HEADING', order: 7, content: 'Phase 2: Administrative, Membership & Financial Frameworks (Weeks 6–8)', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_mth8_${Date.now()}`, type: 'PARAGRAPH', order: 8, content: `Building upon the core governance structure, ACNABIN will formulate Batch 2 instruments: Annexure 3 (Secretariat Duties & Limits), Annexure 4 (Membership Classification & Responsibilities), and Annexure 5 (Financial Governance & Resource Management). Drafts will be presented at Validation Meeting 2, ensuring seamless integration with Phase 1 outputs.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_mth9_${Date.now()}`, type: 'HEADING', order: 9, content: 'Phase 3: Operational, Communication & Safeguarding Protocols (Weeks 9–10)', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_mth10_${Date.now()}`, type: 'PARAGRAPH', order: 10, content: `We will draft Batch 3 instruments: Annexure 6 (Communication & Coordination Rules), Annexure 7 (Day-to-Day Operations & Risk Management), and Annexure 8 (Safeguarding, Integrity & Ethical Conduct). Following Validation Meeting 3, all stakeholder inputs will be reconciled in the revision log.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_mth11_${Date.now()}`, type: 'HEADING', order: 11, content: 'Phase 4: Cross-Document Consistency Audit, Final Consolidation & Close-out (Weeks 11–12)', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_mth12_${Date.now()}`, type: 'PARAGRAPH', order: 12, content: `In the final phase, ACNABIN will perform a comprehensive cross-document consistency audit across the entire suite to verify uniform definitions, harmonious cross-references, and zero conflicting provisions. The consolidated signature-ready MoU package (in MS Word and PDF formats) and Final Consultancy Report with future roadmap will be formally submitted to ${client}.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' }
+        { id: `blk_mth2_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `ACNABIN has structured its technical methodology to ensure rigorous analytical depth, transparent progress tracking, and full compliance with professional standards. The engagement is executed across four sequential phases:`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_mth3_${Date.now()}`, type: 'HEADING', order: 3, content: 'Phase 1: Inception and Diagnostic Scoping', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_mth4_${Date.now()}`, type: 'PARAGRAPH', order: 4, content: `ACNABIN will conduct an inception meeting with ${client}'s designated representatives to confirm engagement boundaries, agree on work schedules, and review baseline documentation, resulting in an Inception Note.`, confidence: 0.95, reviewStatus: defaultReviewStatus },
+        { id: `blk_mth5_${Date.now()}`, type: 'HEADING', order: 5, content: 'Phase 2: Technical Execution & Fieldwork', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_mth6_${Date.now()}`, type: 'PARAGRAPH', order: 6, content: `Our engagement team will conduct detailed data collection, analytical reviews, testing procedures, and key informant interviews adhering strictly to the TOR specifications and applicable professional standards.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_mth7_${Date.now()}`, type: 'HEADING', order: 7, content: 'Phase 3: Stakeholder Review & Feedback Integration', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_mth8_${Date.now()}`, type: 'PARAGRAPH', order: 8, content: `Draft findings and reports will be shared with ${client} management. All feedback received will be systematically evaluated, logged, and integrated into revised deliverables.`, confidence: 0.95, reviewStatus: defaultReviewStatus },
+        { id: `blk_mth9_${Date.now()}`, type: 'HEADING', order: 9, content: 'Phase 4: Final Quality Assurance & Deliverable Submission', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_mth10_${Date.now()}`, type: 'PARAGRAPH', order: 10, content: `Following final peer review under ACNABIN's ISQM 1 quality framework, finalized deliverables will be formally submitted with complete supporting documentation.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' }
       );
       return blocks;
     }
 
-    // 10. Section 5: Detailed Work Plan
+    // 9. Detailed Work Plan
     if (secType === 'WORKPLAN' || titleLower.includes('work plan') || titleLower.includes('workplan')) {
       blocks.push(
-        { id: `blk_wp2_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `ACNABIN will execute the assignment over a 12-week contract duration through a phased, milestone-driven work plan that coordinates activities, outputs, and validation points:`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_wp2_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `ACNABIN will execute the assignment according to a structured milestone schedule coordinating activities, deliverables, and validation points:`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
         {
           id: `blk_wp3_${Date.now()}`,
           type: 'TABLE',
           order: 3,
-          content: `Phase & Key Activities | W1–W2 | W3–W5 | W6–W8 | W9–W10 | W11–W12\nPhase 0: Inception, Document Review & Inception Note Submission | ✓ | | | | \nPhase 1: Batch 1 Drafting (Annexures 1 & 2) & Validation Meeting 1 | | ✓ | | | \nPhase 2: Batch 2 Drafting (Annexures 3, 4 & 5) & Validation Meeting 2 | | | ✓ | | \nPhase 3: Batch 3 Drafting (Annexures 6, 7 & 8) & Validation Meeting 3 | | | | ✓ | \nPhase 4: Cross-Consistency Audit, Consolidated Suite & Final Report | | | | | ✓`,
+          content: `Phase & Key Activities | M1 | M2 | M3 | M4\nPhase 1: Inception Meeting & Inception Note Submission | ✓ | | | \nPhase 2: Core Fieldwork, Data Collection & Analysis | | ✓ | | \nPhase 3: Draft Deliverable Submission & Client Review | | | ✓ | \nPhase 4: Quality Review, Feedback Integration & Final Submission | | | | ✓`,
           confidence: 0.95,
           reviewStatus: 'AI_GENERATED'
         }
@@ -913,15 +879,15 @@ Generate the structured proposal blocks now as JSON array.`;
       return blocks;
     }
 
-    // 11. Section 6: Team Composition and Key Experts
+    // 10. Team Composition and Key Experts
     if (secType === 'TEAM' || titleLower.includes('team') || titleLower.includes('key expert')) {
       blocks.push(
-        { id: `blk_tm2_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `ACNABIN will field a multidisciplinary engagement team combining Chartered Accountants with institutional governance and stakeholder facilitation specialists. Specific team members will be confirmed prior to contract signing; the functional roles and responsibilities required by the assignment are set out below:`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_tm2_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `ACNABIN will field a multidisciplinary engagement team comprising experienced Chartered Accountants and relevant sector specialists. Key roles and responsibilities are summarized below:`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
         {
           id: `blk_tm3_${Date.now()}`,
           type: 'TABLE',
           order: 3,
-          content: `Proposed Role | Candidate Name | Professional Profile | Key Responsibilities\nEngagement Partner / Team Leader | Muhammad Aminul Hoque, FCA | Senior Chartered Accountant & Partner | Overall engagement oversight, high-level client liaison, quality review, and final deliverable sign-off\nForensic & Anti-Fraud Audit Specialist | Md. Rokonuzzaman, FCA | Forensic & Compliance Audit Partner | Lead anti-fraud investigation, financial anomaly analysis, and audit documentation\nAudit Director | B M Nurul Azim, FCA | Audit & Assurance Director | Fieldwork coordination, internal control evaluation, and management letter drafting\nSenior Audit Associate | ACNABIN Audit Team | ICAB Qualified / CA Finalist | Vouching, transaction sampling, verification of procurement documentation`,
+          content: `Proposed Role | Candidate Name | Professional Qualification | Key Responsibilities\nEngagement Partner / Team Leader | Muhammad Aminul Hoque, FCA | Senior Chartered Accountant & Partner | Overall engagement oversight, high-level client liaison, quality review, and final deliverable sign-off\nSenior Audit / Technical Specialist | Md. Rokonuzzaman, FCA | Partner / Senior Specialist | Fieldwork leadership, technical analysis, and quality compliance\nAudit Manager / Director | B M Nurul Azim, FCA | Audit & Assurance Director | Fieldwork coordination, technical reviews, and draft report compilation\nSenior Associate | ACNABIN Professional Team | Qualified / Semi-Qualified Professional | Transaction sampling, data verification, and documentation support`,
           confidence: 0.95,
           reviewStatus: 'AI_GENERATED'
         }
@@ -929,88 +895,57 @@ Generate the structured proposal blocks now as JSON array.`;
       return blocks;
     }
 
-    // 12. Section 7: Responsibility Matrix
-    if (secType === 'RESPONSIBILITY_MATRIX' || titleLower.includes('responsibility matrix')) {
-      blocks.push(
-        { id: `blk_rm2_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `To ensure smooth engagement governance and clear operational boundaries, the matrix below defines the allocation of responsibilities between ACNABIN and ${client} across all project activities:`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        {
-          id: `blk_rm3_${Date.now()}`,
-          type: 'TABLE',
-          order: 3,
-          content: `Activity / Milestone | ACNABIN Engagement Team | Client Secretariat / Validation Leads\nInception meeting and confirmation of engagement scope | Lead / Facilitate | Participate / Approve\nProvision of existing ToRs, records, and background documents | Review / Analyze | Provide / Clarify\nDesign of KII methodology, consultation guides, and schedule | Lead / Draft | Review / Facilitate Introductions\nCoordination of stakeholder availability and meeting logistics | Coordinate | Mobilize Member Organizations\nConduct of KIIs and multi-regional stakeholder consultations | Conduct / Synthesize | Participate\nDrafting of Core MoU and eight governance annexures | Lead / Author | Review / Provide Feedback\nFacilitation of phased validation sessions (Batches 1–3) | Lead / Present | Coordinate / Attend\nMaintenance and updating of Feedback and Revision Matrix | Maintain / Update | Review / Sign Off Resolutions\nComprehensive cross-document consistency audit | Perform Audit | N/A (Internal QA)\nSubmission of Consolidated Final Governance Package & Close-out Report | Lead / Submit | Review, Accept & Formally Approve`,
-          confidence: 0.95,
-          reviewStatus: 'AI_GENERATED'
-        }
-      );
-      return blocks;
-    }
-
-    // 13. Section 8: Quality Assurance and Risk Management
+    // 11. Quality Assurance and Risk Management
     if (secType === 'QUALITY' || titleLower.includes('quality assurance') || titleLower.includes('risk')) {
       blocks.push(
-        { id: `blk_qa2_${Date.now()}`, type: 'HEADING', order: 2, content: '8.1 Quality Assurance Framework', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_qa3_${Date.now()}`, type: 'PARAGRAPH', order: 3, content: `This assignment will be executed under ACNABIN\'s Quality Management System, consistent with International Standard on Quality Management (ISQM 1) and professional standards. Quality controls include: (1) direct day-to-day supervision by the Engagement Partner; (2) technical peer review of every deliverable prior to submission; (3) systematic tracking of stakeholder comments in a Feedback and Revision Matrix; and (4) rigorous cross-referencing audits to prevent conflicting clauses across annexures.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_qa4_${Date.now()}`, type: 'HEADING', order: 4, content: '8.2 Risk Assessment and Mitigation', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
-        {
-          id: `blk_qa5_${Date.now()}`,
-          type: 'TABLE',
-          order: 5,
-          content: `Identified Risk | Potential Impact | Proposed Mitigation Strategy\nUneven stakeholder engagement across regional member organizations | Gaps in regional representation and reduced institutional buy-in | Stratified KII sampling across all 8 divisions; hybrid (in-person & virtual) consultation sessions; proactive scheduling\nMisunderstandings regarding financial liabilities of ordinary members | Resistance from prospective members to signing the MoU | Explicit, prominent ring-fencing clauses in the MoU and Annexure 5 confirming that membership creates no financial liability\nCompressed 12-week timeframe for comprehensive 8-annexure suite | Rushed drafting or delayed validation milestones | Phased batching (Batches 1, 2, 3); parallel KII synthesis; dedicated drafting workstreams; weekly progress tracking\nSensitivities surrounding Executive Committee election rules | Protracted validation debates and delayed sign-off | Objective election criteria; clear dispute resolution mechanisms; consensus-driven validation sessions`,
-          confidence: 0.95,
-          reviewStatus: 'AI_GENERATED'
-        }
+        { id: `blk_qa2_${Date.now()}`, type: 'HEADING', order: 2, content: 'Quality Assurance Framework', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_qa3_${Date.now()}`, type: 'PARAGRAPH', order: 3, content: `This assignment will be executed under ACNABIN's Quality Management System, consistent with International Standard on Quality Management (ISQM 1) and ICAB professional standards. Quality controls include direct Partner supervision, second-partner peer review, and systematic client feedback resolution.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' }
       );
       return blocks;
     }
 
-    // 14. Section 9: Deliverables of the Assignment
+    // 12. Deliverables
     if (secType === 'DELIVERABLES' || titleLower.includes('deliverable')) {
-      blocks.push(
-        { id: `blk_del2_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `In accordance with the Terms of Reference, ACNABIN will submit the following formal deliverables for review and formal approval by ${client}:`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_del3_${Date.now()}`, type: 'BULLET_LIST', order: 3, content: 'Inception Note & Detailed Work Plan: Methodological framework, stakeholder consultation matrix, interview guides, and detailed 12-week implementation schedule (Due: End of Week 2).', confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_del4_${Date.now()}`, type: 'BULLET_LIST', order: 4, content: 'Batch 1 Deliverables: Final Annexure 1 (Core Memorandum of Understanding with Annexes A–E) and Annexure 2 (Executive Committee Elections and Accountability Framework) (Due: End of Week 5).', confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_del5_${Date.now()}`, type: 'BULLET_LIST', order: 5, content: 'Batch 2 Deliverables: Final Annexure 3 (Secretariat Duties & Limits), Annexure 4 (Membership Framework), and Annexure 5 (Financial Governance & Resource Management) (Due: End of Week 8).', confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_del6_${Date.now()}`, type: 'BULLET_LIST', order: 6, content: 'Batch 3 Deliverables: Final Annexure 6 (Communication & Coordination Rules), Annexure 7 (Day-to-Day Operations & Risk Management), and Annexure 8 (Safeguarding, Integrity & Ethical Conduct) (Due: End of Week 10).', confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_del7_${Date.now()}`, type: 'BULLET_LIST', order: 7, content: 'Feedback and Revision Matrix: Comprehensive tracking log detailing all stakeholder feedback received during validation meetings and their agreed resolutions (Updated continuously throughout the assignment).', confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_del8_${Date.now()}`, type: 'BULLET_LIST', order: 8, content: 'Consolidated Final Governance Package: Complete, fully cross-referenced Annexures 1 through 8 in editable Microsoft Word and PDF formats, with signature execution blocks (Due: End of Week 12).', confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_del9_${Date.now()}`, type: 'BULLET_LIST', order: 9, content: 'Final Consultancy Close-out Report: Synthesis report covering analytical methodology, consultation findings, governance design rationales, and an actionable roadmap for future policy development (Due: End of Week 12).', confidence: 0.95, reviewStatus: 'AI_GENERATED' }
-      );
-      return blocks;
-    }
+      const delReqs = (contextPkg.mappedRequirements || []).filter(r => r.category.toLowerCase().includes('deliverable'));
+      const delItems = delReqs.length > 0
+        ? delReqs.map(r => r.requirementText)
+        : [
+            'Inception Report and detailed operational work plan.',
+            'Draft Consultancy / Audit Report for client management review.',
+            'Final Comprehensive Report incorporating client feedback and action plans.'
+          ];
 
-    // 15. Section 10: Timeline of the Assignment
-    if (secType === 'TIMELINE' || titleLower.includes('timeline')) {
       blocks.push(
-        { id: `blk_tml2_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `The 12-week implementation timeline for all engagement phases, drafting activities, validation meetings, and deliverable submissions is presented below:`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        {
-          id: `blk_tml3_${Date.now()}`,
-          type: 'TABLE',
-          order: 3,
-          content: `Phase & Key Activities | W1–W2 | W3–W5 | W6–W8 | W9–W10 | W11–W12\nPhase 0: Inception, Document Review & Inception Note Submission | ✓ | | | | \nPhase 1: Batch 1 Drafting (Annexures 1 & 2) & Validation Meeting 1 | | ✓ | | | \nPhase 2: Batch 2 Drafting (Annexures 3, 4 & 5) & Validation Meeting 2 | | | ✓ | | \nPhase 3: Batch 3 Drafting (Annexures 6, 7 & 8) & Validation Meeting 3 | | | | ✓ | \nPhase 4: Cross-Consistency Audit, Consolidated Suite & Final Report | | | | | ✓`,
+        { id: `blk_del2_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `In accordance with the Terms of Reference, ACNABIN will submit the following formal deliverables for review and formal approval by ${client}:`, confidence: 0.95, reviewStatus: defaultReviewStatus },
+        ...delItems.map((item, idx) => ({
+          id: `blk_del_${idx + 3}_${Date.now()}`,
+          type: 'BULLET_LIST' as ContentBlockType,
+          order: idx + 3,
+          content: item,
           confidence: 0.95,
-          reviewStatus: 'AI_GENERATED'
-        }
+          reviewStatus: defaultReviewStatus
+        }))
       );
       return blocks;
     }
 
-    // 16. Section 11: Relevant Firm Experience
+    // 13. Relevant Firm Experience
     if (secType === 'EXPERIENCE' || titleLower.includes('experience') || titleLower.includes('track record')) {
       blocks.push(
-        { id: `blk_exp2_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `ACNABIN's Advisory & Consultancy practice provides institutional governance, internal control review, policy formulation, and financial management services in Bangladesh. Supporting information on relevant past advisory assignments includes:`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_exp3_${Date.now()}`, type: 'PARAGRAPH', order: 3, content: `- Anti-Fraud & Compliance Audit of NGO/INGO Humanitarian & Development Programs in Bangladesh\n- Forensic Financial Review and In-depth Governance Audit for International Development Donors\n- Statutory & Special Project Audit of Donor-Funded Programs (USAID, FCDO, GNF, EU, Global Fund)`, confidence: 1.0, reviewStatus: 'AI_GENERATED' }
+        { id: `blk_exp2_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `ACNABIN's Audit & Advisory practice provides comprehensive assurance, institutional assessment, internal control review, and financial management services in Bangladesh. Supporting historical firm credentials demonstrate relevant past experience across public, private, and non-profit sectors.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_exp3_${Date.now()}`, type: 'PARAGRAPH', order: 3, content: `- Statutory and Special Project Audits of Development Partner Programs\n- Institutional Governance and Internal Control Evaluations\n- Forensic and Compliance Audits across National and Multinational Organizations`, confidence: 1.0, reviewStatus: 'AI_GENERATED' }
       );
       return blocks;
     }
 
-    // 17. Section 12: About ACNABIN Chartered Accountants
+    // 14. About ACNABIN Chartered Accountants
     if (secType === 'ABOUT_FIRM' || titleLower.includes('about acnabin') || titleLower.includes('firm')) {
       blocks.push(
         {
           id: `blk_ab1_${Date.now()}`,
           type: 'PARAGRAPH',
           order: 2,
-          content: `ACNABIN, Chartered Accountants, was established in February 1985 and has grown over four decades into one of the premier chartered accountancy and management consultancy firms in Bangladesh. The firm operates with full ICAB practice registration and licensing, providing comprehensive professional services across audit and assurance, corporate taxation, institutional advisory, risk management, internal control evaluation, and management consulting. Over its professional history, ACNABIN has maintained an established track record serving government entities, multinational corporations, autonomous statutory bodies, development partners, non-governmental organizations (NGOs), and youth and civil society coalitions across Bangladesh.`,
+          content: `ACNABIN, Chartered Accountants, was established in February 1985 and has grown over four decades into one of the premier chartered accountancy and management consultancy firms in Bangladesh. The firm operates with full ICAB practice registration and licensing, providing comprehensive professional services across audit and assurance, corporate taxation, institutional advisory, risk management, and management consulting.`,
           confidence: 0.95,
           reviewStatus: 'AI_GENERATED'
         },
@@ -1018,31 +953,7 @@ Generate the structured proposal blocks now as JSON array.`;
           id: `blk_ab2_${Date.now()}`,
           type: 'PARAGRAPH',
           order: 3,
-          content: `ACNABIN is an independent member firm of Baker Tilly International, a top-ten global network of independent accounting and business advisory firms spanning over 140 territories worldwide. This international affiliation provides ACNABIN with immediate access to globally recognized institutional frameworks, technical methodologies, international quality control benchmarks (compliant with ISQM 1 and IFAC standards), and specialized advisory knowledge bases. For ${client}, this affiliation ensures that all governance instruments, financial management frameworks, and operational policies developed under this assignment reflect both international non-profit governance standards and Bangladesh's specific institutional and legal environment.`,
-          confidence: 0.95,
-          reviewStatus: 'AI_GENERATED'
-        },
-        {
-          id: `blk_ab3_${Date.now()}`,
-          type: 'PARAGRAPH',
-          order: 4,
-          content: `ACNABIN's Advisory & Consultancy Practice possesses dedicated expertise in institutional restructuring, governance framework design, internal control system review, standard operating procedures (SOP) formulation, financial manual drafting, and organizational capacity assessments. Our advisory team has extensive experience designing multi-tiered governance suites, formulating transparent leadership transition and election frameworks, delineating operational boundaries between secretariats and member entities, and establishing robust safeguarding and conflict-of-interest mechanisms tailored to non-profit networks and multi-stakeholder coalitions.`,
-          confidence: 0.95,
-          reviewStatus: 'AI_GENERATED'
-        },
-        {
-          id: `blk_ab4_${Date.now()}`,
-          type: 'PARAGRAPH',
-          order: 5,
-          content: `ACNABIN is uniquely suited to execute this institutional-strengthening assignment for ${client}. The firm combines rigorous technical drafting capabilities with a participatory consulting methodology that prioritizes stakeholder ownership. Our proposed approach incorporates stratified Key Informant Interviews (KIIs), multi-regional stakeholder consultations across all administrative divisions, phased drafting batches, structured validation meetings, and systematic feedback revision matrices. This proven facilitation and drafting discipline ensures that the final governance suite is not merely a theoretical policy collection, but a practical, actionable, and consensus-backed operational framework that commands broad institutional buy-in from all coalition member organizations.`,
-          confidence: 0.95,
-          reviewStatus: 'AI_GENERATED'
-        },
-        {
-          id: `blk_ab5_${Date.now()}`,
-          type: 'PARAGRAPH',
-          order: 6,
-          content: `Beyond the minimum requirements set out in the Terms of Reference, ACNABIN brings practical value addition to support ${client}'s long-term sustainability. Our deliverables incorporate clear delegation of authority matrices, financial liability ring-fencing to protect member organizations' legal autonomy, multi-tier grievance redress protocols, and comprehensive cross-document consistency auditing to ensure zero conflicting provisions across all eight annexures. Furthermore, the assignment concludes with a Final Consultancy Close-out Report and actionable institutional roadmap, equipping the Secretariat and governing bodies with clear operational guidance for policy adoption, periodic compliance monitoring, and future institutional scaling.`,
+          content: `ACNABIN is an independent member firm of Baker Tilly International, a top-ten global network of independent accounting and business advisory firms spanning over 140 territories worldwide. This international affiliation provides ACNABIN with immediate access to globally recognized technical methodologies, international quality control benchmarks (compliant with ISQM 1 and IFAC standards), and specialized advisory knowledge bases.`,
           confidence: 0.95,
           reviewStatus: 'AI_GENERATED'
         }
@@ -1050,17 +961,17 @@ Generate the structured proposal blocks now as JSON array.`;
       return blocks;
     }
 
-    // 18. Section 13: Conclusion
+    // 15. Conclusion
     if (secType === 'CONCLUSION' || titleLower.includes('conclusion')) {
       blocks.push(
-        { id: `blk_ccl2_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `ACNABIN offers a structured, evidence-grounded approach to developing ${client}'s governance framework. Through comprehensive document review, multi-regional stakeholder consultations, phased drafting batches, and quality assurance, our engagement team will deliver a fully harmonized, signature-ready Memorandum of Understanding and supporting annexures that provide an enduring institutional foundation for collaborative action.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_ccl2_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `ACNABIN offers a structured, evidence-grounded approach to executing "${assignmentRaw}" for ${client}. Through rigorous methodology, multidisciplinary expertise, and adherence to professional quality standards, our engagement team is fully prepared to deliver all required outputs efficiently and effectively.`, confidence: 0.95, reviewStatus: defaultReviewStatus },
         { id: `blk_ccl3_${Date.now()}`, type: 'PARAGRAPH', order: 3, content: `On behalf of ACNABIN, Chartered Accountants,\n\nMuhammad Aminul Hoque, FCA\nPartner\nACNABIN, Chartered Accountants\nBDBL Bhaban (Level-13 & 15), 12 Kawran Bazar Commercial Area, Dhaka-1215`, confidence: 1.0, reviewStatus: 'AI_GENERATED' }
       );
       return blocks;
     }
 
     // 19. Appendices Section (Only for documents specifically placed inside Proposal Appendices)
-    if (secType === 'APPENDIX' || titleLower.includes('appendices') || titleLower.includes('annex')) {
+    if (secType === 'APPENDIX' || titleLower.includes('appendices' ) || titleLower.includes('annex')) {
       const placements = SubmissionPlacementEngine.determinePlacements(contextPkg.projectId);
       const embeddedAppendices = placements.filter((p) => p.placement.toLowerCase().includes('appendix'));
 
@@ -1099,7 +1010,7 @@ Generate the structured proposal blocks now as JSON array.`;
 
     // Generic / Fallback Section
     blocks.push(
-      { id: `blk_gen2_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `ACNABIN presents our structured consulting response for ${client}. ${contextPkg.writingBrief}`, confidence: 0.9, reviewStatus: 'AI_GENERATED' }
+      { id: `blk_gen2_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `ACNABIN presents our structured professional response for ${client}. ${contextPkg.writingBrief || ''}`.trim(), confidence: 0.9, reviewStatus: defaultReviewStatus }
     );
 
     return blocks;

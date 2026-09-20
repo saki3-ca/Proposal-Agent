@@ -348,7 +348,7 @@ export const ProposalDraftWorkbench: React.FC<ProposalDraftWorkbenchProps> = ({ 
               </h1>
             </div>
             <div className="flex items-center space-x-3 text-xs text-slate-500 pt-0.5">
-              <span>Client: <strong className="text-slate-800 font-semibold">{draft.clientName || 'Target Client'}</strong></span>
+              <span>Client: <strong className="text-slate-800 font-semibold">{draft.clientName || '[Action Required: Confirm Client]'}</strong></span>
               <span>•</span>
               <span>Version: <strong className="text-slate-800 font-semibold">{draft.version}.0</strong></span>
               <span>•</span>

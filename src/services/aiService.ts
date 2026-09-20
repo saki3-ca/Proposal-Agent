@@ -2,7 +2,7 @@ import { Requirement, ProposalSection, RequirementCategory, TorKnowledgeModel } 
 
 export interface AiRunLog {
   id: string;
-  provider: 'Gemini' | 'DeepSeek' | 'Claude' | 'Groq';
+  provider: 'Gemini' | 'Groq' | 'Cloudflare';
   task: 'document_analysis' | 'requirement_extraction' | 'experience_matching' | 'draft_proposal' | 'dual_model_review';
   timestamp: string;
   tokensUsed: number;
@@ -19,77 +19,284 @@ export interface DocumentChunk {
   endLine: number;
 }
 
+export interface BackendExtractedRequirement {
+  requirement_id: string;
+  category: string;
+  requirement: string;
+  mandatory: boolean;
+  evidence_required: boolean;
+  source_document: string;
+  source_location: string;
+  status: 'identified' | 'verified' | 'ambiguous' | 'missing';
+  notes: string | null;
+}
+
+export interface BackendExtractionResponse {
+  success: boolean;
+  task_type: string;
+  provider: string;
+  model: string;
+  fallback_used: boolean;
+  retry_used: boolean;
+  requirements_count: number;
+  requirements: BackendExtractedRequirement[];
+  error?: string;
+}
+
+export interface BackendDocumentItem {
+  document_id: string;
+  filename: string;
+  relative_path: string;
+  folder: string;
+  document_type: string;
+  source_type: 'required_document' | 'previous_proposal' | 'other';
+  page_count: number;
+  char_count: number;
+  processing_status: 'processed' | 'pending' | 'failed';
+  summary?: string;
+}
+
+export interface BackendDocumentInventoryResponse {
+  success: boolean;
+  documents: BackendDocumentItem[];
+  total_documents: number;
+  required_documents_count: number;
+  previous_proposals_count: number;
+  error?: string;
+}
+
+export interface BackendEvidenceResult {
+  evidence_id: string;
+  requirement_id: string;
+  document_id: string;
+  document_name: string;
+  source_type: 'required_document' | 'previous_proposal' | 'other';
+  relevance: number;
+  excerpt: string;
+  source_location: string;
+  reason: string;
+  evidence_status: 'DIRECT_EVIDENCE' | 'SUPPORTING_EVIDENCE' | 'REFERENCE_ONLY' | 'INSUFFICIENT' | 'NOT_FOUND';
+  missing_information: string[];
+}
+
+export interface BackendRequirementMatrixItem {
+  requirement_id: string;
+  category: string;
+  requirement: string;
+  mandatory: boolean;
+  evidence_required: boolean;
+  requirement_status: 'identified' | 'verified' | 'ambiguous' | 'missing';
+  evidence_items: BackendEvidenceResult[];
+  overall_evidence_status: 'DIRECT_EVIDENCE' | 'SUPPORTING_EVIDENCE' | 'REFERENCE_ONLY' | 'INSUFFICIENT' | 'NOT_FOUND';
+  missing_information: string[];
+  review_status: 'pending_review' | 'accepted' | 'edited' | 'rejected';
+}
+
+export interface BackendRequirementMatrixResponse {
+  success: boolean;
+  task_type: string;
+  provider: string;
+  model: string;
+  fallback_used: boolean;
+  total_requirements: number;
+  matrix: BackendRequirementMatrixItem[];
+  summary?: Record<string, number>;
+  error?: string;
+}
+
+const FASTAPI_BASE_URL = (import.meta as any).env?.VITE_DOCUMENT_PROCESSOR_URL || 'http://127.0.0.1:8000';
+
 export class AiService {
   private static primaryProvider = 'Gemini 1.5 Pro / Flash';
-  private static secondaryProvider = 'DeepSeek R1 / V3';
-  private static claudeProvider = 'Claude 3.5 Sonnet / Opus';
-  private static groqProvider = 'Groq (Llama 3.3 70B / Mixtral)';
+  private static groqProvider = 'Groq (OpenAI GPT-OSS 120B / Llama 3.3 70B / Mixtral)';
+  private static cloudflareProvider = 'Cloudflare Workers AI (@cf/zai-org/glm-4.7-flash)';
 
   /**
-   * Helper to retrieve Groq API key from environment
+   * Health check to verify backend AI providers availability
    */
-  private static getGroqApiKey(): string {
-    return (import.meta as any).env?.VITE_GROQ_API_KEY || '';
+  static async checkAiHealth(): Promise<{ groq: boolean; cloudflare: boolean; gemini: boolean }> {
+    try {
+      const response = await fetch(`${FASTAPI_BASE_URL}/api/ai/health`, { method: 'GET' });
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch (e) {
+      console.warn('Failed to fetch backend AI health:', e);
+    }
+    return { groq: false, cloudflare: false, gemini: false };
   }
 
   /**
-   * Direct Groq API Execution Pipeline
-   * Powered by Llama 3.3 70B Versatile for high-speed inference
+   * Centralized backend AI execution dispatcher
+   */
+  static async callBackendAi(
+    provider: 'groq' | 'cloudflare' | 'gemini',
+    messages: { role: 'system' | 'user' | 'assistant'; content: string }[],
+    options?: {
+      model?: string;
+      temperature?: number;
+      max_tokens?: number;
+      fallback?: boolean;
+      fallback_provider?: 'groq' | 'cloudflare' | 'gemini';
+    }
+  ): Promise<string> {
+    const response = await fetch(`${FASTAPI_BASE_URL}/api/ai/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        provider,
+        model: options?.model,
+        messages,
+        temperature: options?.temperature ?? 0.1,
+        max_tokens: options?.max_tokens ?? 1024,
+        fallback: options?.fallback ?? false,
+        fallback_provider: options?.fallback_provider
+      })
+    });
+
+    if (!response.ok) {
+      let errDetail = `HTTP ${response.status} ${response.statusText}`;
+      try {
+        const errJson = await response.json();
+        if (errJson?.error) {
+          errDetail = errJson.error;
+        }
+      } catch {}
+      throw new Error(`AI Backend Error (${response.status}): ${errDetail}`);
+    }
+
+    const data = await response.json();
+    if (!data.success) {
+      throw new Error(data.error || 'AI Backend call unsuccessful.');
+    }
+    return data.content || '';
+  }
+
+  /**
+   * Cloudflare Workers AI Execution via FastAPI Backend
+   * Default Model: @cf/zai-org/glm-4.7-flash
+   */
+  static async callCloudflareAi(
+    prompt: string,
+    systemInstruction: string = 'You are ACNABIN proposal drafting assistant.',
+    model: string = '@cf/zai-org/glm-4.7-flash'
+  ): Promise<string> {
+    return this.callBackendAi(
+      'cloudflare',
+      [
+        { role: 'system', content: systemInstruction },
+        { role: 'user', content: prompt }
+      ],
+      { model, temperature: 0.1, max_tokens: 1024 }
+    );
+  }
+
+  /**
+   * Groq API Execution via FastAPI Backend
+   * Default Model: openai/gpt-oss-120b with backend fallback chain
    */
   static async callGroqApi(
     prompt: string,
     systemInstruction: string = 'You are ACNABIN proposal drafting assistant.',
-    model: string = 'llama-3.3-70b-versatile'
+    model: string = 'openai/gpt-oss-120b'
   ): Promise<string> {
-    const apiKey = this.getGroqApiKey();
-    if (!apiKey || apiKey === 'your_groq_api_key_here') {
-      throw new Error('Groq API Key not configured in environment.');
-    }
+    return this.callBackendAi(
+      'groq',
+      [
+        { role: 'system', content: systemInstruction },
+        { role: 'user', content: prompt }
+      ],
+      { model, temperature: 0.1, max_tokens: 4096 }
+    );
+  }
 
-    const candidateModels = [
-      model,
-      'llama-3.3-70b-versatile',
-      'llama-3.1-8b-instant',
-      'mixtral-8x7b-32768',
-      'gemma2-9b-it'
-    ];
-    const uniqueModels = Array.from(new Set(candidateModels));
+  /**
+   * Structured Requirement Extraction via FastAPI Backend Task Router
+   * Routes via Gemini -> Cloudflare fallback with Pydantic validation.
+   */
+  static async extractRequirementsStructured(
+    content: string,
+    documentName: string = 'Tender Document',
+    documentType: string = 'RFP'
+  ): Promise<BackendExtractionResponse> {
+    const response = await fetch(`${FASTAPI_BASE_URL}/api/ai/extract-requirements`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        document_name: documentName,
+        document_type: documentType,
+        content
+      })
+    });
 
-    let lastError: Error | null = null;
-
-    for (const modelCandidate of uniqueModels) {
+    if (!response.ok) {
+      let errDetail = `HTTP ${response.status} ${response.statusText}`;
       try {
-        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${apiKey}`
-          },
-          body: JSON.stringify({
-            model: modelCandidate,
-            messages: [
-              { role: 'system', content: systemInstruction },
-              { role: 'user', content: prompt }
-            ],
-            temperature: 0.1,
-            max_tokens: 4096
-          })
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          return data.choices?.[0]?.message?.content || '';
-        } else {
-          const errText = await response.text();
-          console.warn(`Groq model '${modelCandidate}' returned status ${response.status}: ${errText}`);
-          lastError = new Error(`Groq API Error (${response.status}): ${errText}`);
+        const errJson = await response.json();
+        if (errJson?.error) {
+          errDetail = errJson.error;
         }
-      } catch (err: any) {
-        lastError = err;
-      }
+      } catch {}
+      throw new Error(`Requirement Extraction Error (${response.status}): ${errDetail}`);
     }
 
-    throw lastError || new Error('All Groq candidate models failed.');
+    return await response.json();
+  }
+
+  /**
+   * Retrieves Document Inventory from backend test_data collection
+   */
+  static async getDocumentInventory(): Promise<BackendDocumentInventoryResponse> {
+    const response = await fetch(`${FASTAPI_BASE_URL}/api/documents/inventory`, {
+      method: 'GET'
+    });
+
+    if (!response.ok) {
+      let errDetail = `HTTP ${response.status} ${response.statusText}`;
+      try {
+        const errJson = await response.json();
+        if (errJson?.error) {
+          errDetail = errJson.error;
+        }
+      } catch {}
+      throw new Error(`Document Inventory Error (${response.status}): ${errDetail}`);
+    }
+
+    return await response.json();
+  }
+
+  /**
+   * Builds Requirement Matrix by retrieving and matching evidence from repository
+   */
+  static async buildRequirementMatrix(
+    requirements: BackendExtractedRequirement[]
+  ): Promise<BackendRequirementMatrixResponse> {
+    const response = await fetch(`${FASTAPI_BASE_URL}/api/ai/build-requirement-matrix`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        requirements
+      })
+    });
+
+    if (!response.ok) {
+      let errDetail = `HTTP ${response.status} ${response.statusText}`;
+      try {
+        const errJson = await response.json();
+        if (errJson?.error) {
+          errDetail = errJson.error;
+        }
+      } catch {}
+      throw new Error(`Build Requirement Matrix Error (${response.status}): ${errDetail}`);
+    }
+
+    return await response.json();
   }
 
   /**
@@ -474,20 +681,17 @@ Return ONLY valid JSON matching this schema:
     let summary = '';
     let usedProvider = 'Mock/Baseline';
 
-    const apiKey = this.getGroqApiKey();
-    if (apiKey && apiKey !== 'your_groq_api_key_here') {
-      try {
-        const prompt = `Action: ${action.toUpperCase()}\n\nContent:\n${currentContent}`;
-        const sysMsg = `You are ACNABIN's professional technical proposal writer. Apply ACNABIN house style (confident, formal, first-person plural 'we/our', zero unsupported claims).`;
-        const aiResponse = await this.callGroqApi(prompt, sysMsg);
-        if (aiResponse) {
-          resultText = aiResponse;
-          summary = `Processed via Groq Llama 3.3 70B (${action}).`;
-          usedProvider = 'Groq';
-        }
-      } catch (e) {
-        console.warn('Groq action failed, utilizing client fallback:', e);
+    try {
+      const prompt = `Action: ${action.toUpperCase()}\n\nContent:\n${currentContent}`;
+      const sysMsg = `You are ACNABIN's professional technical proposal writer. Apply ACNABIN house style (confident, formal, first-person plural 'we/our', zero unsupported claims).`;
+      const aiResponse = await this.callGroqApi(prompt, sysMsg);
+      if (aiResponse) {
+        resultText = aiResponse;
+        summary = `Processed via Groq (${action}).`;
+        usedProvider = 'Groq';
       }
+    } catch (e) {
+      console.warn('Groq action failed, utilizing client fallback:', e);
     }
 
     if (usedProvider === 'Mock/Baseline') {
@@ -516,7 +720,7 @@ Return ONLY valid JSON matching this schema:
   }
 
   /**
-   * Dual-Model Review (DeepSeek): Audits proposal drafts generated by Gemini/Groq for contradictions or missing requirements.
+   * Dual-Model Review: Audits proposal drafts generated by Gemini/Groq for contradictions or missing requirements.
    */
   static async runDualModelReview(
     sections: ProposalSection[],

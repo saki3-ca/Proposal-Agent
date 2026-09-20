@@ -16,7 +16,7 @@ export interface ProcessedPipelineResult {
   classification: ClassifiedDocType;
   extractedRequirements: Partial<Requirement>[];
   suggestedModelRouting: {
-    primary: 'Gemini' | 'DeepSeek' | 'Claude' | 'Groq';
+    primary: 'Gemini' | 'Groq' | 'Cloudflare';
     reason: string;
   };
 }
@@ -67,36 +67,43 @@ export class LocalDocumentPipeline {
   }
 
   /**
-   * 3. AI Model Router: Intelligent Model Selection Matrix across Gemini, DeepSeek, Claude, and Groq
+   * 3. AI Model Router: Intelligent Model Selection Matrix across Gemini, Groq, and Cloudflare
    */
   static selectBestModelForTask(
     classification: ClassifiedDocType,
     taskType: 'extraction' | 'drafting' | 'audit' | 'fast_edit'
-  ): { primary: 'Gemini' | 'DeepSeek' | 'Claude' | 'Groq'; reason: string } {
+  ): { primary: 'Gemini' | 'Groq' | 'Cloudflare'; reason: string } {
     if (taskType === 'fast_edit') {
       return {
         primary: 'Groq',
-        reason: 'Groq (Llama 3.3 70B) provides sub-second latency for inline draft rewrites and tone improvements.'
+        reason: 'Groq (OpenAI GPT-OSS 120B / Llama 3.3 70B) provides sub-second latency for inline draft rewrites and tone improvements.'
       };
     }
 
     if (taskType === 'audit') {
       return {
-        primary: 'DeepSeek',
-        reason: 'DeepSeek R1 reasoning model excels at finding discrepancies, missing annexes, and unevidenced claims.'
+        primary: 'Groq',
+        reason: 'Groq (OpenAI GPT-OSS 120B) provides fast automated compliance and discrepancy audits.'
+      };
+    }
+
+    if (classification === 'Past Proposal / Reference' || classification === 'General Supporting Attachment') {
+      return {
+        primary: 'Cloudflare',
+        reason: 'Cloudflare Workers AI (GLM-4.7 Flash) provides responsive secondary serverless inference for general synthesis and reference analysis.'
       };
     }
 
     if (classification === 'TOR/EOI' && taskType === 'drafting') {
       return {
         primary: 'Gemini',
-        reason: 'Gemini 1.5 Pro handles ultra-long context ingestion (1M+ tokens) to draft complete ACNABIN technical proposals.'
+        reason: 'Gemini handles long context ingestion to draft complete ACNABIN technical proposals.'
       };
     }
 
     return {
-      primary: 'Claude',
-      reason: 'Claude 3.5 Sonnet provides highly structured, nuanced prose for executive summaries and complex technical methodologies.'
+      primary: 'Gemini',
+      reason: 'Gemini provides comprehensive structured prose for executive summaries and complex technical methodologies.'
     };
   }
 
