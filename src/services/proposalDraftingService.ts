@@ -19,6 +19,7 @@ import { ProposalDraftValidator } from './proposalDraftValidator';
 import { ProposalPlannerService } from './proposalPlannerService';
 import { ProposalDatabaseService } from './proposalDatabaseService';
 import { SubmissionPlacementEngine } from './submissionPlacementEngine';
+import { ProposalExemplarService } from './proposalExemplarService';
 
 const DRAFT_STORAGE_PREFIX = 'acnabin_proposal_draft_';
 const VERSIONS_STORAGE_PREFIX = 'acnabin_proposal_draft_versions_';
@@ -291,10 +292,17 @@ export class ProposalDraftingService {
     // Build section context package
     const contextPkg: SectionDraftContextPackage = ProposalDraftContextService.buildSectionDraftContext(projectId, targetSection.id);
 
+    // Retrieve gold-standard exemplar writing & table blueprints for this section
+    const exemplar = ProposalExemplarService.getSectionExemplar(
+      contextPkg.sectionTitle,
+      contextPkg.clientName,
+      contextPkg.assignmentTitle
+    );
+
     // Build system & prompt instructions
     const systemPrompt = `You are ACNABIN's technical proposal writer. Draft Section ${contextPkg.sectionNumber}: "${contextPkg.sectionTitle}" for ${contextPkg.clientName}.
 
-Your job: Write tight, evidence-backed prose that proves ACNABIN can deliver. No hedging. No "in accordance with" repetition. Active voice. Concrete.
+Your job: Write tight, evidence-backed prose that proves ACNABIN can deliver. Follow the authentic tone, professional cadence, and structured tables of ACNABIN's winning proposals.
 
 RULES:
 - State what you'll do, how, and why it works. Evidence matters more than words.
@@ -302,6 +310,7 @@ RULES:
 - Use varied sentence structure. Mix short statements with longer explanations.
 - ACNABIN is experienced and confident. Write like it. Avoid "we understand", "we appreciate", "as discussed".
 - If you mention methodology, name the steps. If you cite experience, ground it in real projects.
+- Include structured tables with clear headers where appropriate (e.g., RACI, Team, Experience, Milestones, Risks).
 - Never invent client names, staff names, or past assignments not in the verified evidence.
 
 Return ONLY a valid JSON array of content blocks (no preamble):
@@ -310,7 +319,7 @@ Return ONLY a valid JSON array of content blocks (no preamble):
     "type": "HEADING" | "PARAGRAPH" | "BULLET_LIST" | "NUMBERED_LIST" | "TABLE" | "CALLOUT" | "PLACEHOLDER",
     "content": "Main text content",
     "items": ["Item 1", "Item 2"], // MANDATORY FOR LISTS
-    "tableData": { "headers": ["Col 1"], "rows": [["Value"]] }, // FOR TABLES
+    "tableData": { "headers": ["Col 1", "Col 2"], "rows": [["Val 1", "Val 2"]] }, // FOR TABLES
     "headingLevel": 2, // FOR HEADINGS (2-4)
     "requirementReferences": ["REQ-001"], // optional
     "evidenceReferences": ["EVID-001"] // optional
@@ -323,6 +332,11 @@ Client: ${contextPkg.clientName}
 
 Writing Brief & Intended Response:
 ${contextPkg.writingBrief}
+
+Gold-Standard Reference Style & Benchmark Pattern:
+Style: ${exemplar.writingStyle}
+Exemplar Blueprint:
+${exemplar.exemplarContent}
 
 TOR Requirements to Address in this Section:
 ${contextPkg.mappedRequirements.map((r) => `- [${r.id}] ${r.category}: ${r.requirementText} (Mandatory: ${r.mandatory ? 'YES' : 'NO'})`).join('\n') || 'No specific TOR requirements mapped.'}
@@ -679,15 +693,15 @@ Generate the structured proposal blocks now as JSON array.`;
       blocks.push(
         { id: `blk_c2_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `for\n\n${assignmentRaw}`, confidence: 0.95, reviewStatus: defaultReviewStatus },
         { id: `blk_c3_${Date.now()}`, type: 'PARAGRAPH', order: 3, content: submittedToBlock, confidence: 0.95, reviewStatus: defaultReviewStatus },
-        { id: `blk_c4_${Date.now()}`, type: 'PARAGRAPH', order: 4, content: `Submitted by:\nACNABIN, Chartered Accountants\nAn Independent Member Firm of Baker Tilly International\nBDBL Bhaban (Level-13 & 15), 12 Kawran Bazar Commercial Area, Dhaka-1215`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_c4_${Date.now()}`, type: 'PARAGRAPH', order: 4, content: `Submitted by:\n${ProposalExemplarService.FIRM_PROFILE.name}\n${ProposalExemplarService.FIRM_PROFILE.affiliation}\n${ProposalExemplarService.FIRM_PROFILE.address}`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
         { id: `blk_c5_${Date.now()}`, type: 'HEADING', order: 5, content: 'Contact Info', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_c6_${Date.now()}`, type: 'PARAGRAPH', order: 6, content: `Primary Contact:\nAbdullah-Al-Mamun, FCA\nDirector, Audit & Consultancy\nACNABIN, Chartered Accountants\nmamun.abdullah@acnabin-bd.com\n+8801915561888`, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_c7_${Date.now()}`, type: 'PARAGRAPH', order: 7, content: `Secondary Contact:\nMd. Shif All Mostakin\nAssistant Director, Audit & Consultancy\nACNABIN, Chartered Accountants\nmostakin@acnabin-bd.com\n+8801820584481`, confidence: 1.0, reviewStatus: 'AI_GENERATED' }
+        { id: `blk_c6_${Date.now()}`, type: 'PARAGRAPH', order: 6, content: `Primary Contact:\n${ProposalExemplarService.CONTACT_PERSONS.primary.name}\n${ProposalExemplarService.CONTACT_PERSONS.primary.designation}\n${ProposalExemplarService.FIRM_PROFILE.name}\n${ProposalExemplarService.CONTACT_PERSONS.primary.email}\n${ProposalExemplarService.CONTACT_PERSONS.primary.mobile}`, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_c7_${Date.now()}`, type: 'PARAGRAPH', order: 7, content: `Secondary Contact:\n${ProposalExemplarService.CONTACT_PERSONS.secondary.name}\n${ProposalExemplarService.CONTACT_PERSONS.secondary.designation}\n${ProposalExemplarService.FIRM_PROFILE.name}\n${ProposalExemplarService.CONTACT_PERSONS.secondary.email}\n${ProposalExemplarService.CONTACT_PERSONS.secondary.mobile}`, confidence: 1.0, reviewStatus: 'AI_GENERATED' }
       );
       return blocks;
     }
 
-    // 2. Letter of Submission
+    // 2. Letter of Submission / Transmittal
     if (secType === 'TRANSMITTAL' || titleLower.includes('letter') || titleLower.includes('transmittal')) {
       const refYear = contextPkg.proposalReferenceYear || String(new Date().getFullYear());
       const subNum = contextPkg.submissionNumber || '0000';
@@ -723,10 +737,10 @@ Generate the structured proposal blocks now as JSON array.`;
         { id: `blk_l2_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: recipientBlockLines.join('\n'), confidence: 0.95, reviewStatus: defaultReviewStatus },
         { id: `blk_l3_${Date.now()}`, type: 'PARAGRAPH', order: 3, content: 'Date:', confidence: 1.0, reviewStatus: 'AI_GENERATED' },
         { id: `blk_l4_${Date.now()}`, type: 'PARAGRAPH', order: 4, content: 'Dear Sir/Madam,', confidence: 1.0, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_l5_${Date.now()}`, type: 'PARAGRAPH', order: 5, content: `We submit our technical proposal for ${assignmentText} in response to the Terms of Reference issued by ${recipientDisplayName}. Our financial proposal is submitted separately as required.`, confidence: 0.95, reviewStatus: defaultReviewStatus },
-        { id: `blk_l6_${Date.now()}`, type: 'PARAGRAPH', order: 6, content: `If accepted, we will commence work within the agreed timeline following contract signature. This proposal remains valid throughout the stipulated validity period.`, confidence: 0.95, reviewStatus: defaultReviewStatus },
-        { id: `blk_l7_${Date.now()}`, type: 'PARAGRAPH', order: 7, content: `We confirm no actual or potential conflict of interest exists between ACNABIN and ${client}. Our formal Declaration of Independence is maintained.`, confidence: 0.95, reviewStatus: defaultReviewStatus },
-        { id: `blk_l8_${Date.now()}`, type: 'PARAGRAPH', order: 8, content: `We acknowledge that ${recipientDisplayName} is not bound to accept any proposal received and may modify terms or cancel this procurement in accordance with applicable rules.`, confidence: 0.95, reviewStatus: defaultReviewStatus },
+        { id: `blk_l5_${Date.now()}`, type: 'PARAGRAPH', order: 5, content: `We submit our Technical Proposal for ${assignmentText} in response to the Terms of Reference issued by ${recipientDisplayName}. Our financial proposal is submitted separately as required.`, confidence: 0.95, reviewStatus: defaultReviewStatus },
+        { id: `blk_l6_${Date.now()}`, type: 'PARAGRAPH', order: 6, content: `ACNABIN Chartered Accountants is an independent member firm of Baker Tilly International. Our multidisciplinary team combines 41+ years of professional distinction since 1985, deep sector expertise, and rigorous quality assurance.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_l7_${Date.now()}`, type: 'PARAGRAPH', order: 7, content: `We confirm our firm's commitments to:\n- Independence and Objectivity: In accordance with the IESBA Code of Ethics and applicable national regulations;\n- Professional Standards Compliance: Full alignment with International Standards on Auditing (ISA), IFRS, and relevant national statutes;\n- Confidentiality: Strict data protection and non-disclosure of all information obtained during the assignment;\n- Professional Competence and Due Care: Direct supervision by senior FCA partners and multi-tier quality control;\n- Full Scope Execution: Complete delivery of all technical milestones, reports, and deliverables within agreed timelines.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_l8_${Date.now()}`, type: 'PARAGRAPH', order: 8, content: `We confirm no actual or potential conflict of interest exists between ACNABIN and ${client}. Our formal Declaration of Independence is maintained throughout this engagement.`, confidence: 0.95, reviewStatus: defaultReviewStatus },
         { id: `blk_l9_${Date.now()}`, type: 'PARAGRAPH', order: 9, content: `Yours sincerely,\n\nOn behalf of ACNABIN, Chartered Accountants\n\nMuhammad Aminul Hoque, FCA\nPartner\nACNABIN, Chartered Accountants\nBDBL Bhaban (Level-13 & 15), 12 Kawran Bazar Commercial Area, Dhaka-1215`, confidence: 1.0, reviewStatus: 'AI_GENERATED' }
       );
       return blocks;
@@ -743,30 +757,14 @@ Generate the structured proposal blocks now as JSON array.`;
     // 4. Executive Summary
     if (secType === 'EXECUTIVE_SUMMARY' || titleLower.includes('executive summary')) {
       blocks.push(
-        {
-          id: `blk_exec1_${Date.now()}`,
-          type: 'PARAGRAPH',
-          order: 2,
-          content: `Our approach to "${assignmentRaw}" for ${client} is structured, evidence-backed, and designed to deliver all TOR objectives on schedule. We bring deep technical competence, established quality frameworks, and clear milestone management.`,
-          confidence: 0.95,
-          reviewStatus: defaultReviewStatus
-        },
-        {
-          id: `blk_exec2_${Date.now()}`,
-          type: 'PARAGRAPH',
-          order: 3,
-          content: `The engagement runs across four phases: Inception Diagnostic, Core Fieldwork, Stakeholder Consultations & Draft Deliverables, and Quality Review & Close-out. This delivers transparent progress tracking and factual verification at every stage.`,
-          confidence: 0.95,
-          reviewStatus: 'AI_GENERATED'
-        },
-        {
-          id: `blk_exec3_${Date.now()}`,
-          type: 'PARAGRAPH',
-          order: 4,
-          content: `ACNABIN (established 1985, Baker Tilly International member) brings extensive audit and advisory experience in Bangladesh. Our team pairs senior chartered accountants with sector specialists to deliver reliable, compliant results.`,
-          confidence: 0.95,
-          reviewStatus: 'AI_GENERATED'
-        }
+        { id: `blk_exec1_${Date.now()}`, type: 'HEADING', order: 2, content: '1.1 Understanding of the Assignment', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_exec2_${Date.now()}`, type: 'PARAGRAPH', order: 3, content: `ACNABIN Chartered Accountants understands that ${client} requires specialized technical services for "${assignmentRaw}". Our approach combines institutional governance review, risk-based substantive testing, automated controls validation, and participatory capacity building to ensure sustainable outcomes.`, confidence: 0.95, reviewStatus: defaultReviewStatus },
+        { id: `blk_exec3_${Date.now()}`, type: 'HEADING', order: 4, content: '1.2 Key Objectives', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_exec4_${Date.now()}`, type: 'PARAGRAPH', order: 5, content: `- Evaluate institutional governance, operational workflows, and statutory compliance;\n- Assess automation, software systems, and data-integrity safeguards;\n- Review fund flow mechanisms, budgetary discipline, and procurement trails;\n- Formulate standardized policy manuals, templates, and reporting annexures;\n- Conduct participatory validation sessions and stakeholder debriefings.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_exec5_${Date.now()}`, type: 'HEADING', order: 6, content: '1.3 Major Scope Areas & Technical Approach', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_exec6_${Date.now()}`, type: 'PARAGRAPH', order: 7, content: `Our technical scope covers: (1) Governance & Policy Review; (2) Financial Operations & Internal Controls; (3) Automation & MIS Assurance; (4) Procurement & Asset Management; (5) Risk Management & Safeguards; and (6) Institutional Rollout & Training. We execute across four progressive phases: Inception Diagnostic, Field Assessment, Draft Formulation, and Quality Review & Final Submission.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_exec7_${Date.now()}`, type: 'HEADING', order: 8, content: '1.4 Quality Assurance & Value Proposition', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_exec8_${Date.now()}`, type: 'PARAGRAPH', order: 9, content: `ACNABIN (established 1985, Baker Tilly International member) brings 41+ years of practice, 8 FCA Partners, and 490 personnel. Every engagement is subjected to independent multi-tier quality reviews under our ISQM 1 quality management system.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' }
       );
       return blocks;
     }
@@ -774,10 +772,10 @@ Generate the structured proposal blocks now as JSON array.`;
     // 5. Understanding of the Assignment and the Client
     if (titleLower.includes('understanding of')) {
       blocks.push(
-        { id: `blk_und2_${Date.now()}`, type: 'HEADING', order: 2, content: '1.1 Understanding of the Assignment', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_und3_${Date.now()}`, type: 'PARAGRAPH', order: 3, content: `Our review of the Terms of Reference for "${assignmentRaw}" shows the core goal is delivering objective, standards-compliant services that meet ${client}'s operational targets.`, confidence: 0.95, reviewStatus: defaultReviewStatus },
-        { id: `blk_und4_${Date.now()}`, type: 'HEADING', order: 4, content: '1.2 Understanding of the Client Context', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_und5_${Date.now()}`, type: 'PARAGRAPH', order: 5, content: `We align our execution with ${client}'s operating environment and regulatory requirements. We coordinate directly with your designated focal points to minimize disruption while ensuring full compliance.`, confidence: 0.95, reviewStatus: defaultReviewStatus }
+        { id: `blk_und1_${Date.now()}`, type: 'HEADING', order: 2, content: '1.1 Understanding of the Assignment Mandate', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_und2_${Date.now()}`, type: 'PARAGRAPH', order: 3, content: `Our detailed review of the Terms of Reference for "${assignmentRaw}" confirms that the core goal is delivering objective, standards-compliant services that meet ${client}'s operational targets and donor covenants.`, confidence: 0.95, reviewStatus: defaultReviewStatus },
+        { id: `blk_und3_${Date.now()}`, type: 'HEADING', order: 4, content: '1.2 Understanding of the Client Context & Regulatory Ecosystem', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_und4_${Date.now()}`, type: 'PARAGRAPH', order: 5, content: `We align our execution with ${client}'s operating environment, governance framework, and relevant regulatory statutes (including Income Tax Act 2023, VAT Act 2012, and donor guidelines). We coordinate directly with designated focal points to ensure seamless execution.`, confidence: 0.95, reviewStatus: defaultReviewStatus }
       );
       return blocks;
     }
@@ -788,13 +786,14 @@ Generate the structured proposal blocks now as JSON array.`;
       const objItems = objReqs.length > 0
         ? objReqs.map(r => r.requirementText)
         : [
-            `Deliver all services for "${assignmentRaw}" meeting TOR specifications.`,
-            `Complete diagnostic analysis, fieldwork, and stakeholder reviews.`,
+            `Deliver all technical services for "${assignmentRaw}" meeting TOR specifications.`,
+            `Perform thorough diagnostic analysis, fieldwork, and stakeholder reviews.`,
+            `Evaluate governance, financial systems, automated controls, and compliance.`,
             `Submit milestone and final deliverables within agreed timeframes.`
           ];
 
       blocks.push(
-        { id: `blk_obj2_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `We will execute the assignment to achieve these core objectives for ${client}:`, confidence: 0.95, reviewStatus: defaultReviewStatus },
+        { id: `blk_obj1_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `ACNABIN will execute the assignment to achieve the following core objectives for ${client}:`, confidence: 0.95, reviewStatus: defaultReviewStatus },
         ...objItems.map((item, idx) => ({
           id: `blk_obj_${idx + 3}_${Date.now()}`,
           type: 'BULLET_LIST' as ContentBlockType,
@@ -814,13 +813,14 @@ Generate the structured proposal blocks now as JSON array.`;
         ? scopeReqs.map(r => r.requirementText)
         : [
             'Inception, document review, and diagnostic methodology finalization.',
-            'Detailed fieldwork, data gathering, analysis, and verification of records.',
-            'Draft deliverable preparation and presentation to client management.',
+            'Detailed fieldwork, data gathering, financial analysis, and verification of records.',
+            'Review of automated systems, software access logs, and data integrity safeguards.',
+            'Draft deliverable preparation, management letter formulation, and presentation to leadership.',
             'Incorporation of review feedback and submission of final approved deliverables.'
           ];
 
       blocks.push(
-        { id: `blk_scp2_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `Our scope of work covers all requirements in the Terms of Reference for "${assignmentRaw}":`, confidence: 0.95, reviewStatus: defaultReviewStatus },
+        { id: `blk_scp1_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `Our scope of work covers all requirements in the Terms of Reference for "${assignmentRaw}":`, confidence: 0.95, reviewStatus: defaultReviewStatus },
         ...scopeItems.map((item, idx) => ({
           id: `blk_scp_${idx + 3}_${Date.now()}`,
           type: 'BULLET_LIST' as ContentBlockType,
@@ -834,30 +834,51 @@ Generate the structured proposal blocks now as JSON array.`;
     }
 
     // 8. Proposed Methodology
-    if (secType === 'METHODOLOGY' || titleLower.includes('methodology')) {
+    if (secType === 'METHODOLOGY' || titleLower.includes('methodology') || titleLower.includes('approach')) {
       blocks.push(
-        { id: `blk_mth2_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `Our technical methodology combines rigorous analysis with transparent tracking across four phases:`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_mth3_${Date.now()}`, type: 'HEADING', order: 3, content: 'Phase 1: Inception and Diagnostic Scoping', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_mth4_${Date.now()}`, type: 'PARAGRAPH', order: 4, content: `We hold an inception meeting with ${client}'s team to confirm scope, agree work schedules, and review baseline data, producing an Inception Note.`, confidence: 0.95, reviewStatus: defaultReviewStatus },
-        { id: `blk_mth5_${Date.now()}`, type: 'HEADING', order: 5, content: 'Phase 2: Technical Execution & Fieldwork', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_mth6_${Date.now()}`, type: 'PARAGRAPH', order: 6, content: `Our team collects data, performs analytical tests, and conducts key informant interviews following professional standards.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_mth7_${Date.now()}`, type: 'HEADING', order: 7, content: 'Phase 3: Stakeholder Review & Feedback Integration', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_mth8_${Date.now()}`, type: 'PARAGRAPH', order: 8, content: `Draft findings go to ${client} management. We log all feedback and integrate revisions systematically into the final drafts.`, confidence: 0.95, reviewStatus: defaultReviewStatus },
-        { id: `blk_mth9_${Date.now()}`, type: 'HEADING', order: 9, content: 'Phase 4: Final Quality Assurance & Deliverable Submission', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_mth10_${Date.now()}`, type: 'PARAGRAPH', order: 10, content: `After peer review under our ISQM 1 framework, final deliverables are submitted with full documentation.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' }
+        { id: `blk_mth1_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `ACNABIN's technical methodology is structured across four progressive, iterative phases designed to ensure complete technical rigor and stakeholder buy-in:`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_mth2_${Date.now()}`, type: 'HEADING', order: 3, content: 'Phase 1: Inception, Scoping & Diagnostic Planning', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_mth3_${Date.now()}`, type: 'PARAGRAPH', order: 4, content: `We hold a formal kick-off meeting with ${client}'s leadership to confirm scope, agree work schedules, and review baseline data, producing a comprehensive Inception Report and sampling framework.`, confidence: 0.95, reviewStatus: defaultReviewStatus },
+        { id: `blk_mth4_${Date.now()}`, type: 'HEADING', order: 5, content: 'Phase 2: Detailed Assessment, Substantive Testing & Fieldwork', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_mth5_${Date.now()}`, type: 'PARAGRAPH', order: 6, content: `Our team collects data, performs analytical tests, audits IT/MIS system controls, and conducts key informant interviews following international professional standards.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_mth6_${Date.now()}`, type: 'HEADING', order: 7, content: 'Phase 3: Drafting, Gap Synthesis & Deliverable Formulation', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_mth7_${Date.now()}`, type: 'PARAGRAPH', order: 8, content: `Draft findings, management observations, and policy frameworks go to ${client} management. We log all feedback and integrate revisions systematically.`, confidence: 0.95, reviewStatus: defaultReviewStatus },
+        { id: `blk_mth8_${Date.now()}`, type: 'HEADING', order: 9, content: 'Phase 4: Validation, Quality Assurance & Final Submission', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_mth9_${Date.now()}`, type: 'PARAGRAPH', order: 10, content: `After multi-tier peer review under our ISQM 1 framework, final deliverables are submitted with complete documentation.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
+        {
+          id: `blk_mth_tbl_${Date.now()}`,
+          type: 'TABLE',
+          order: 11,
+          content: 'Verification Level | Key Focus Areas | Evidence & Documentation Produced\nHead Office Level | Governance, policy approval, consolidated AIS/MIS, bank reconciliations, statutory tax/VAT compliance. | Board minutes inspection, GL-to-trial balance reconciliation, tax deposit challans.\nBranch / Unit Level | Cash books, sub-ledgers, staff loan adjustments, local procurement vouchers, physical cash counts. | Branch reconciliation reports, cash count certificates, sample voucher audit trails.\nField / Beneficiary Level | Direct beneficiary verification, passbook cross-checks, asset physical tagging, project activity monitoring. | Signed verification sheets, beneficiary feedback notes, physical inspection photos.',
+          tableData: {
+            headers: ['Verification Level', 'Key Focus Areas', 'Evidence & Documentation Produced'],
+            rows: [
+              ['Head Office Level', 'Governance, policy approval, consolidated AIS/MIS, bank reconciliations, statutory tax/VAT compliance.', 'Board minutes inspection, GL-to-trial balance reconciliation, tax deposit challans.'],
+              ['Branch / Unit Level', 'Cash books, sub-ledgers, staff loan adjustments, local procurement vouchers, physical cash counts.', 'Branch reconciliation reports, cash count certificates, sample voucher audit trails.'],
+              ['Field / Beneficiary Level', 'Direct beneficiary verification, passbook cross-checks, asset physical tagging, project activity monitoring.', 'Signed verification sheets, beneficiary feedback notes, physical inspection photos.']
+            ]
+          },
+          confidence: 0.95,
+          reviewStatus: 'AI_GENERATED'
+        }
       );
       return blocks;
     }
 
     // 9. Detailed Work Plan
     if (secType === 'WORKPLAN' || titleLower.includes('work plan') || titleLower.includes('workplan')) {
+      const reportingRows = ProposalExemplarService.REPORTING_CYCLE_STAGES.map(s => [s.stage, s.milestone, s.description]);
       blocks.push(
-        { id: `blk_wp2_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `We execute the assignment along a clear milestone schedule:`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_wp1_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `ACNABIN executes the assignment along a rigorous 8-stage reporting and milestone cycle:`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
         {
-          id: `blk_wp3_${Date.now()}`,
+          id: `blk_wp2_${Date.now()}`,
           type: 'TABLE',
           order: 3,
-          content: `Phase & Key Activities | M1 | M2 | M3 | M4\nPhase 1: Inception Meeting & Inception Note Submission | ✓ | | | \nPhase 2: Core Fieldwork, Data Collection & Analysis | | ✓ | | \nPhase 3: Draft Deliverable Submission & Client Review | | | ✓ | \nPhase 4: Quality Review, Feedback Integration & Final Submission | | | | ✓`,
+          content: ['Stage | Milestone | Description', ...reportingRows.map(r => r.join(' | '))].join('\n'),
+          tableData: {
+            headers: ['Stage', 'Milestone', 'Description'],
+            rows: reportingRows
+          },
           confidence: 0.95,
           reviewStatus: 'AI_GENERATED'
         }
@@ -866,14 +887,19 @@ Generate the structured proposal blocks now as JSON array.`;
     }
 
     // 10. Team Composition and Key Experts
-    if (secType === 'TEAM' || titleLower.includes('team') || titleLower.includes('key expert')) {
+    if (secType === 'TEAM' || titleLower.includes('team') || titleLower.includes('key expert') || titleLower.includes('personnel')) {
+      const teamRows = ProposalExemplarService.CORE_TEAM_SUITE.map(t => [t.position, t.name, t.designation, t.qualification, t.experienceYears]);
       blocks.push(
-        { id: `blk_tm2_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `Our team combines experienced Chartered Accountants with relevant sector specialists:`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_tm1_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `ACNABIN has mobilized a dedicated multidisciplinary team combining senior Fellows of ICAB (FCA), international specialists (FCCA, ACA ICAEW, CISA), and experienced audit associates:`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
         {
-          id: `blk_tm3_${Date.now()}`,
+          id: `blk_tm2_${Date.now()}`,
           type: 'TABLE',
           order: 3,
-          content: `Proposed Role | Candidate Name | Professional Qualification | Key Responsibilities\nEngagement Partner / Team Leader | Muhammad Aminul Hoque, FCA | Senior Chartered Accountant & Partner | Overall engagement oversight, high-level client liaison, quality review, and final deliverable sign-off\nSenior Audit / Technical Specialist | Md. Rokonuzzaman, FCA | Partner / Senior Specialist | Fieldwork leadership, technical analysis, and quality compliance\nAudit Manager / Director | B M Nurul Azim, FCA | Audit & Assurance Director | Fieldwork coordination, technical reviews, and draft report compilation\nSenior Associate | ACNABIN Professional Team | Qualified / Semi-Qualified Professional | Transaction sampling, data verification, and documentation support`,
+          content: ['Proposed Position | Name of Personnel | Firm Designation | Professional Qualification | Experience', ...teamRows.map(r => r.join(' | '))].join('\n'),
+          tableData: {
+            headers: ['Proposed Position', 'Name of Personnel', 'Firm Designation', 'Professional Qualification', 'Experience'],
+            rows: teamRows
+          },
           confidence: 0.95,
           reviewStatus: 'AI_GENERATED'
         }
@@ -881,28 +907,65 @@ Generate the structured proposal blocks now as JSON array.`;
       return blocks;
     }
 
-    // 11. Quality Assurance and Risk Management
-    if (secType === 'QUALITY' || titleLower.includes('quality assurance') || titleLower.includes('risk')) {
+    // 11. Responsibility (RACI) Matrix
+    if (titleLower.includes('raci') || titleLower.includes('responsibility matrix')) {
+      const raciRows = ProposalExemplarService.RACI_MATRIX.map(r => [r.activity, r.auditTeam, r.clientAuthority, r.clientFocal]);
       blocks.push(
-        { id: `blk_qa2_${Date.now()}`, type: 'HEADING', order: 2, content: 'Quality Assurance Framework', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_qa3_${Date.now()}`, type: 'PARAGRAPH', order: 3, content: `We operate under ACNABIN's ISQM 1-compliant Quality Management System. Quality controls include direct Partner oversight, second-partner peer reviews, and structured client feedback resolution.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' }
+        { id: `blk_rc1_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `The Responsibility (RACI) Matrix below clearly defines operational responsibilities, management oversight, and ACNABIN's independent advisory and audit obligations:`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
+        {
+          id: `blk_rc2_${Date.now()}`,
+          type: 'TABLE',
+          order: 3,
+          content: ['Assignment Activity | ACNABIN Team | Client Leadership / Board | Client Focal / Staff', ...raciRows.map(r => r.join(' | '))].join('\n'),
+          tableData: {
+            headers: ['Assignment Activity', 'ACNABIN Team', 'Client Leadership / Board', 'Client Focal / Staff'],
+            rows: raciRows
+          },
+          confidence: 0.95,
+          reviewStatus: 'AI_GENERATED'
+        },
+        { id: `blk_rc3_${Date.now()}`, type: 'PARAGRAPH', order: 4, content: `Legend: R = Responsible (Does the work) | A = Accountable (Approves the work) | C = Consulted (Provides two-way input) | I = Informed (Kept updated on progress)`, confidence: 1.0, reviewStatus: 'AI_GENERATED' }
       );
       return blocks;
     }
 
-    // 12. Deliverables
+    // 12. Quality Assurance and Risk Management
+    if (secType === 'QUALITY' || titleLower.includes('quality assurance') || titleLower.includes('risk')) {
+      const riskRows = ProposalExemplarService.ENGAGEMENT_RISKS.map(r => [r.risk, r.impact, r.mitigation]);
+      blocks.push(
+        { id: `blk_qa1_${Date.now()}`, type: 'HEADING', order: 2, content: 'Quality Assurance Framework (ISQM 1)', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_qa2_${Date.now()}`, type: 'PARAGRAPH', order: 3, content: `ACNABIN operates under the Baker Tilly International Global Quality Assurance Framework and the International Standard on Quality Management 1 (ISQM 1). Quality controls include direct Partner oversight, second-partner peer reviews, and structured client feedback resolution.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_qa3_${Date.now()}`, type: 'HEADING', order: 4, content: 'Engagement Risk Management & Mitigation Matrix', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
+        {
+          id: `blk_qa4_${Date.now()}`,
+          type: 'TABLE',
+          order: 5,
+          content: ['Identified Risk Area | Potential Impact | Proposed Mitigation Strategy', ...riskRows.map(r => r.join(' | '))].join('\n'),
+          tableData: {
+            headers: ['Identified Risk Area', 'Potential Impact', 'Proposed Mitigation Strategy'],
+            rows: riskRows
+          },
+          confidence: 0.95,
+          reviewStatus: 'AI_GENERATED'
+        }
+      );
+      return blocks;
+    }
+
+    // 13. Deliverables
     if (secType === 'DELIVERABLES' || titleLower.includes('deliverable')) {
       const delReqs = (contextPkg.mappedRequirements || []).filter(r => r.category.toLowerCase().includes('deliverable'));
       const delItems = delReqs.length > 0
         ? delReqs.map(r => r.requirementText)
         : [
             'Inception Report and detailed operational work plan.',
-            'Draft Consultancy / Audit Report for client management review.',
+            'Diagnostic Gap Analysis Matrix & Interim Assessment Report.',
+            'Draft Consultancy / Audit Report & Management Letter for client review.',
             'Final Comprehensive Report incorporating client feedback and action plans.'
           ];
 
       blocks.push(
-        { id: `blk_del2_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `We submit the following formal deliverables for ${client}'s review and approval:`, confidence: 0.95, reviewStatus: defaultReviewStatus },
+        { id: `blk_del1_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `We submit the following formal deliverables for ${client}'s review and approval:`, confidence: 0.95, reviewStatus: defaultReviewStatus },
         ...delItems.map((item, idx) => ({
           id: `blk_del_${idx + 3}_${Date.now()}`,
           type: 'BULLET_LIST' as ContentBlockType,
@@ -915,31 +978,25 @@ Generate the structured proposal blocks now as JSON array.`;
       return blocks;
     }
 
-    // 13. Relevant Firm Experience
-    if (secType === 'EXPERIENCE' || titleLower.includes('experience') || titleLower.includes('track record')) {
+    // 14. Timeline of the Assignment
+    if (secType === 'TIMELINE' || titleLower.includes('timeline')) {
       blocks.push(
-        { id: `blk_exp2_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `ACNABIN provides assurance, advisory, and financial management services across public, private, and non-profit sectors in Bangladesh. Relevant track record:`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
-        { id: `blk_exp3_${Date.now()}`, type: 'PARAGRAPH', order: 3, content: `- Statutory and special audits of donor-funded programs\n- Institutional governance and internal control evaluations\n- Compliance and forensic audits for national and multinational bodies`, confidence: 1.0, reviewStatus: 'AI_GENERATED' }
-      );
-      return blocks;
-    }
-
-    // 14. About ACNABIN Chartered Accountants
-    if (secType === 'ABOUT_FIRM' || titleLower.includes('about acnabin') || titleLower.includes('firm')) {
-      blocks.push(
+        { id: `blk_tm_head_${Date.now()}`, type: 'HEADING', order: 2, content: 'Engagement Execution Timeline', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_tm_p1_${Date.now()}`, type: 'PARAGRAPH', order: 3, content: `The assignment is structured across four progressive phases, ensuring rigorous review, thorough fieldwork, and timely submission of all deliverables:`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
         {
-          id: `blk_ab1_${Date.now()}`,
-          type: 'PARAGRAPH',
-          order: 2,
-          content: `ACNABIN was founded in 1985 and is now one of Bangladesh's leading chartered accountancy and advisory firms. We're ICAB-licensed and provide audit, taxation, advisory, and risk management services across public, private, and NGO sectors.`,
-          confidence: 0.95,
-          reviewStatus: 'AI_GENERATED'
-        },
-        {
-          id: `blk_ab2_${Date.now()}`,
-          type: 'PARAGRAPH',
-          order: 3,
-          content: `As an independent member of Baker Tilly International (a top-ten global network in 140+ territories), ACNABIN accesses internationally recognized methodologies, quality benchmarks (ISQM 1 & IFAC-compliant), and specialized knowledge across audit, tax, and advisory disciplines.`,
+          id: `blk_tm_tbl_${Date.now()}`,
+          type: 'TABLE',
+          order: 4,
+          content: 'Phase & Activities | Month 1 | Month 2 | Month 3 | Month 4\nPhase 1: Inception Diagnostic & Scoping | ■ | | | \nPhase 2: Technical Assessment & Fieldwork | | ■ | | \nPhase 3: Draft Deliverables & Client Review | | | ■ | \nPhase 4: Quality Review & Final Submission | | | | ■',
+          tableData: {
+            headers: ['Phase & Activities', 'Month 1', 'Month 2', 'Month 3', 'Month 4'],
+            rows: [
+              ['Phase 1: Inception Diagnostic & Scoping', '■', '', '', ''],
+              ['Phase 2: Technical Assessment & Fieldwork', '', '■', '', ''],
+              ['Phase 3: Draft Deliverables & Client Review', '', '', '■', ''],
+              ['Phase 4: Quality Review & Final Submission', '', '', '', '■']
+            ]
+          },
           confidence: 0.95,
           reviewStatus: 'AI_GENERATED'
         }
@@ -947,23 +1004,97 @@ Generate the structured proposal blocks now as JSON array.`;
       return blocks;
     }
 
-    // 15. Conclusion
-    if (secType === 'CONCLUSION' || titleLower.includes('conclusion')) {
+    // 15. Relevant Firm Experience
+    if (secType === 'EXPERIENCE' || titleLower.includes('experience') || titleLower.includes('track record') || titleLower.includes('credentials')) {
+      const devRows = ProposalExemplarService.EXPERIENCE_DATA.developmentProjects.slice(0, 8).map(p => [String(p.sl), p.name, p.partner, p.period, p.funding]);
+      const bankRows = ProposalExemplarService.EXPERIENCE_DATA.banksAndFinancial.slice(0, 6).map(b => [String(b.sl), b.name, b.years, b.type]);
+      const ngoRows = ProposalExemplarService.EXPERIENCE_DATA.ngosAndMfisArray.slice(0, 6).map(n => [String(n.sl), n.name, n.years]);
+
       blocks.push(
-        { id: `blk_ccl2_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `ACNABIN offers a structured, evidence-grounded approach to executing "${assignmentRaw}" for ${client}. Our team combines deep technical expertise with established quality standards to deliver on all TOR requirements.`, confidence: 0.95, reviewStatus: defaultReviewStatus },
-        { id: `blk_ccl3_${Date.now()}`, type: 'PARAGRAPH', order: 3, content: `On behalf of ACNABIN, Chartered Accountants,\n\nMuhammad Aminul Hoque, FCA\nPartner\nACNABIN, Chartered Accountants\nBDBL Bhaban (Level-13 & 15), 12 Kawran Bazar Commercial Area, Dhaka-1215`, confidence: 1.0, reviewStatus: 'AI_GENERATED' }
+        { id: `blk_exp1_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `ACNABIN Chartered Accountants possesses 41+ years of demonstrated distinction delivering high-impact audit, financial management, governance restructuring, and advisory assignments across Bangladesh. Our track record spans 104+ major institutional clients.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_exp2_${Date.now()}`, type: 'HEADING', order: 3, content: 'Development Partner & Bilateral/Multilateral Assignments', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
+        {
+          id: `blk_exp3_${Date.now()}`,
+          type: 'TABLE',
+          order: 4,
+          content: ['Sl. | Project / Assignment Name | Client / Partner | Period | Funding Agency', ...devRows.map(r => r.join(' | '))].join('\n'),
+          tableData: {
+            headers: ['Sl.', 'Project / Assignment Name', 'Client / Partner', 'Period', 'Funding Agency'],
+            rows: devRows
+          },
+          confidence: 0.95,
+          reviewStatus: 'AI_GENERATED'
+        },
+        { id: `blk_exp4_${Date.now()}`, type: 'HEADING', order: 5, content: 'Financial Institutions & Apex Bodies Experience', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
+        {
+          id: `blk_exp5_${Date.now()}`,
+          type: 'TABLE',
+          order: 6,
+          content: ['Sl. | Client Name | Audit Year(s) | Entity Classification', ...bankRows.map(r => r.join(' | '))].join('\n'),
+          tableData: {
+            headers: ['Sl.', 'Client Name', 'Audit Year(s)', 'Entity Classification'],
+            rows: bankRows
+          },
+          confidence: 0.95,
+          reviewStatus: 'AI_GENERATED'
+        },
+        { id: `blk_exp6_${Date.now()}`, type: 'HEADING', order: 7, content: 'NGO & Microfinance Governance Engagements', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
+        {
+          id: `blk_exp7_${Date.now()}`,
+          type: 'TABLE',
+          order: 8,
+          content: ['Sl. | Client Name | Period', ...ngoRows.map(r => r.join(' | '))].join('\n'),
+          tableData: {
+            headers: ['Sl.', 'Client Name', 'Period'],
+            rows: ngoRows
+          },
+          confidence: 0.95,
+          reviewStatus: 'AI_GENERATED'
+        }
       );
       return blocks;
     }
 
-    // 19. Appendices Section (Only for documents specifically placed inside Proposal Appendices)
-    if (secType === 'APPENDIX' || titleLower.includes('appendices' ) || titleLower.includes('annex')) {
+    // 16. About ACNABIN Chartered Accountants
+    if (secType === 'ABOUT_FIRM' || titleLower.includes('about acnabin') || titleLower.includes('firm profile')) {
+      const partnerRows = ProposalExemplarService.PARTNERS_MATRIX.map(p => [String(p.sl), p.name, p.qualifications, p.experience]);
+      blocks.push(
+        { id: `blk_ab1_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `ACNABIN, Chartered Accountants was established in February 1985 and is now one of Bangladesh's leading chartered accountancy and advisory firms. We operate with 490 personnel and 8 FCA Partners across Dhaka and Chattogram.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_ab2_${Date.now()}`, type: 'PARAGRAPH', order: 3, content: `As an independent member firm of Baker Tilly International (a top-10 global network across 147 countries with 43,000+ professionals), ACNABIN adheres to international methodologies, quality standards (ISQM 1), and IFAC-compliant auditing standards.`, confidence: 0.95, reviewStatus: 'AI_GENERATED' },
+        { id: `blk_ab3_${Date.now()}`, type: 'HEADING', order: 4, content: 'ACNABIN FCA Partners Matrix', headingLevel: 2, confidence: 1.0, reviewStatus: 'AI_GENERATED' },
+        {
+          id: `blk_ab4_${Date.now()}`,
+          type: 'TABLE',
+          order: 5,
+          content: ['Sl. | Partner Name | Qualifications | Experience', ...partnerRows.map(r => r.join(' | '))].join('\n'),
+          tableData: {
+            headers: ['Sl.', 'Partner Name', 'Qualifications', 'Experience'],
+            rows: partnerRows
+          },
+          confidence: 0.95,
+          reviewStatus: 'AI_GENERATED'
+        }
+      );
+      return blocks;
+    }
+
+    // 17. Conclusion
+    if (secType === 'CONCLUSION' || titleLower.includes('conclusion')) {
+      blocks.push(
+        { id: `blk_ccl1_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `ACNABIN offers a structured, evidence-grounded approach to executing "${assignmentRaw}" for ${client}. Our multidisciplinary team combines 41+ years of practice with international quality standards to deliver all TOR requirements on schedule.`, confidence: 0.95, reviewStatus: defaultReviewStatus },
+        { id: `blk_ccl2_${Date.now()}`, type: 'PARAGRAPH', order: 3, content: `On behalf of ACNABIN, Chartered Accountants,\n\nMuhammad Aminul Hoque, FCA\nPartner\nACNABIN, Chartered Accountants\nBDBL Bhaban (Level-13 & 15), 12 Kawran Bazar Commercial Area, Dhaka-1215`, confidence: 1.0, reviewStatus: 'AI_GENERATED' }
+      );
+      return blocks;
+    }
+
+    // 18. Appendices Section
+    if (secType === 'APPENDIX' || titleLower.includes('appendices') || titleLower.includes('annex')) {
       const placements = SubmissionPlacementEngine.determinePlacements(contextPkg.projectId);
       const embeddedAppendices = placements.filter((p) => p.placement.toLowerCase().includes('appendix'));
 
       if (embeddedAppendices.length > 0) {
         blocks.push({
-          id: `blk_app2_${Date.now()}`,
+          id: `blk_app1_${Date.now()}`,
           type: 'PARAGRAPH',
           order: 2,
           content: `In accordance with the Terms of Reference submission guidelines, the following supporting annexes and documentation are incorporated as formal appendices to this Technical Proposal:`,
@@ -983,7 +1114,7 @@ Generate the structured proposal blocks now as JSON array.`;
         });
       } else {
         blocks.push({
-          id: `blk_app2_${Date.now()}`,
+          id: `blk_app1_${Date.now()}`,
           type: 'PARAGRAPH',
           order: 2,
           content: `In accordance with the Terms of Reference instructions, all supporting statutory certificates, firm credentials, and prescribed forms are compiled separately within the Proposal Submission Package and Checklist.`,
@@ -996,7 +1127,7 @@ Generate the structured proposal blocks now as JSON array.`;
 
     // Generic / Fallback Section
     blocks.push(
-      { id: `blk_gen2_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `ACNABIN presents our structured professional response for ${client}. ${contextPkg.writingBrief || ''}`.trim(), confidence: 0.9, reviewStatus: defaultReviewStatus }
+      { id: `blk_gen1_${Date.now()}`, type: 'PARAGRAPH', order: 2, content: `ACNABIN presents our structured professional response for ${client}. ${contextPkg.writingBrief || ''}`.trim(), confidence: 0.9, reviewStatus: defaultReviewStatus }
     );
 
     return blocks;

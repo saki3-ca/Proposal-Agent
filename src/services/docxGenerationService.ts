@@ -1030,12 +1030,12 @@ export class DocxGenerationService {
                 new Paragraph({
                   alignment: AlignmentType.CENTER,
                   spacing: { after: 30, line: 240 },
-                  children: [new TextRun({ text: 'Md. Shif All Mostakin', font: primaryFont, size: 18, bold: true, color: h1Color })]
+                  children: [new TextRun({ text: 'Nusrat Maria, FCCA, ACA (ICAEW)', font: primaryFont, size: 18, bold: true, color: h1Color })]
                 }),
                 new Paragraph({
                   alignment: AlignmentType.CENTER,
                   spacing: { after: 30, line: 240 },
-                  children: [new TextRun({ text: 'Assistant Director, Audit & Consultancy', font: primaryFont, size: 16, color: '444444' })]
+                  children: [new TextRun({ text: 'Deputy Director, Audit & Consultancy', font: primaryFont, size: 16, color: '444444' })]
                 }),
                 new Paragraph({
                   alignment: AlignmentType.CENTER,
@@ -1045,12 +1045,12 @@ export class DocxGenerationService {
                 new Paragraph({
                   alignment: AlignmentType.CENTER,
                   spacing: { after: 30, line: 240 },
-                  children: [new TextRun({ text: 'mostakin@acnabin-bd.com', font: primaryFont, size: 16, color: '444444' })]
+                  children: [new TextRun({ text: 'nusrat@acnabin-bd.com', font: primaryFont, size: 16, color: '444444' })]
                 }),
                 new Paragraph({
                   alignment: AlignmentType.CENTER,
                   spacing: { after: 0, line: 240 },
-                  children: [new TextRun({ text: '+8801820584481', font: primaryFont, size: 16, color: '444444' })]
+                  children: [new TextRun({ text: '+8801791317795', font: primaryFont, size: 16, color: '444444' })]
                 })
               ]
             })
