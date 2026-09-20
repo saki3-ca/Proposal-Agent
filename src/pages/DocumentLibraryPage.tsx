@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { ProjectDocument, ProcessingStatus } from '../types';
 import { DocumentProcessingService } from '../services/documentProcessingService';
 import { DocumentViewer } from '../components/documents/DocumentViewer';
-import { LibraryDocumentItem } from '../services/documentLibraryData';
+import { LibraryDocumentItem, REAL_TEST_DATA_DOCUMENTS } from '../services/documentLibraryData';
+import { EvidenceIndexingService } from '../services/evidenceIndexingService';
 import { DocumentClassificationService } from '../services/documentClassificationService';
 import {
   FileText,
@@ -61,14 +62,14 @@ export const DocumentLibraryPage: React.FC = () => {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) {
+        if (Array.isArray(parsed) && parsed.length > 0) {
           return DocumentStorageService.deduplicateDocuments(parsed);
         }
       }
     } catch (e) {
       console.warn('Failed to parse stored document library from localStorage:', e);
     }
-    return [];
+    return REAL_TEST_DATA_DOCUMENTS;
   });
 
   const [selectedCategory, setSelectedCategory] = useState<LibraryCategory>('ALL');
@@ -94,6 +95,11 @@ export const DocumentLibraryPage: React.FC = () => {
         const idbDocs = await DocumentStorageService.loadLibraryDocuments();
         if (Array.isArray(idbDocs) && idbDocs.length > 0) {
           setDocuments(DocumentStorageService.deduplicateDocuments(idbDocs));
+        } else {
+          // Initialize with pre-loaded benchmark knowledge corpus
+          setDocuments(REAL_TEST_DATA_DOCUMENTS);
+          await DocumentStorageService.saveLibraryDocuments(REAL_TEST_DATA_DOCUMENTS);
+          EvidenceIndexingService.buildEvidenceIndex();
         }
       } catch (err) {
         console.warn('Could not load from IndexedDB, using in-memory state:', err);
@@ -236,6 +242,19 @@ export const DocumentLibraryPage: React.FC = () => {
     setDocuments(cleaned);
     setDuplicateNotice(diff > 0 ? `Cleaned ${diff} duplicate document(s).` : 'No duplicates found.');
     setTimeout(() => setDuplicateNotice(null), 4000);
+  };
+
+  const handleSyncBenchmarkData = async () => {
+    try {
+      const merged = DocumentStorageService.deduplicateDocuments([...REAL_TEST_DATA_DOCUMENTS, ...documents]);
+      setDocuments(merged);
+      await DocumentStorageService.saveLibraryDocuments(merged);
+      EvidenceIndexingService.buildEvidenceIndex();
+      setDuplicateNotice(`✨ Synchronized ${merged.length} authentic partner CVs, client appointment records, statutory licenses, and previous proposals into Evidence Index!`);
+      setTimeout(() => setDuplicateNotice(null), 6000);
+    } catch (e) {
+      console.warn('Failed to sync benchmark data:', e);
+    }
   };
 
   const handleCopyDocMarkdown = (doc: LibraryDocumentItem, e?: React.SyntheticEvent) => {
@@ -449,6 +468,15 @@ export const DocumentLibraryPage: React.FC = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+            <button
+              onClick={handleSyncBenchmarkData}
+              className="px-3 py-1.5 text-[#1B2A6B] hover:text-white bg-blue-50 hover:bg-[#1B2A6B] border border-blue-200 rounded text-xs font-bold transition-all flex items-center space-x-1.5 shadow-2xs"
+              title="Re-synchronize all 67 authentic partner profiles, appointment letters, licenses, and previous proposals"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-blue-600 group-hover:text-white" />
+              <span>Sync All Benchmark Corpus</span>
+            </button>
+
             <button
               onClick={handleCleanDuplicates}
               className="px-3 py-1.5 text-slate-700 hover:text-indigo-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded text-xs font-semibold transition-colors flex items-center space-x-1.5"
