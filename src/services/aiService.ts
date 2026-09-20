@@ -425,29 +425,26 @@ export class AiService {
 
     const rawExtractedItems: any[] = [];
 
-    const systemMsg = `You are a strict procurement auditor. Analyze the provided Terms of Reference (TOR) / RFP document chunk and extract EVERY single explicitly stated requirement into a structured JSON array.
+    const systemMsg = `You are a procurement auditor. Extract EVERY requirement explicitly stated in the TOR/RFP text.
 
-RULES:
-1. ONLY extract requirements explicitly stated in the provided text.
-2. DO NOT hallucinate, infer, or invent missing requirements, certifications, or licenses.
-3. DO NOT assume every requirement requires supporting evidence or document upload. A statement like "Demonstrate experience" is a technical proposal content requirement, NOT a supporting document requirement unless an explicit certificate, work order, or reference letter is demanded.
-4. Distinguish conditional requirements (e.g., "if applicable", "where relevant", "if selected") and mark "conditional": true.
-5. If no explicit procurement requirements exist in this chunk, return an empty array [].
+CRITICAL RULES:
+1. Quote the document. If it's not written there, don't extract it.
+2. Do NOT invent qualifications, certifications, budget limits, or client info.
+3. A statement like "Demonstrate 5 years' experience" is a technical requirement for the proposal, NOT a supporting document requirement. Extract as-is.
+4. Mark "evidenceRequired: true" ONLY if the TOR explicitly demands a certificate, reference letter, audit report, or other document submission.
+5. Mark "conditional: true" if requirement uses language like "if applicable", "where relevant", or "if selected".
+6. If no explicit requirements exist in this chunk, return [].
 
-Return ONLY a valid JSON array matching this exact schema:
+Return ONLY valid JSON array:
 [
   {
-    "requirementText": "Verbatim or faithful description of the requirement clause",
-    "category": "Eligibility" | "Technical" | "Methodology" | "Deliverable" | "Timeline" | "Team" | "Experience" | "Financial" | "Administrative" | "Submission" | "Evaluation" | "Reporting" | "Contractual",
-    "subcategory": "Optional subcategory or null",
-    "mandatory": true,
-    "conditional": false,
-    "evidenceRequired": false,
-    "sourceSection": "Exact section title where this clause appears",
-    "sourceClause": "Clause identifier if present e.g. Clause 4.1 or null",
-    "sourceQuote": "Direct excerpt quote from the document text",
-    "aiInterpretation": "Factual operational summary of the requirement",
-    "relatedProposalSection": "Target proposal section",
+    "requirementText": "Exact requirement clause or faithful summary",
+    "category": "Eligibility|Technical|Methodology|Deliverable|Timeline|Team|Experience|Financial|Administrative|Submission|Evaluation|Reporting|Contractual",
+    "mandatory": true|false,
+    "conditional": true|false,
+    "evidenceRequired": true|false,
+    "sourceSection": "Exact section heading from document",
+    "sourceQuote": "Direct text excerpt from document",
     "aiConfidence": 0.95
   }
 ]`;
@@ -556,14 +553,15 @@ Return ONLY a valid JSON array matching this exact schema:
       return defaultModel;
     }
 
-    const systemMsg = `You are a strict procurement auditor. Extract a comprehensive TOR Knowledge Model JSON object based ONLY on explicit facts stated in the provided document.
+    const systemMsg = `You extract TOR facts. ONLY cite what is explicitly stated.
 
-CRITICAL RULES:
-1. ONLY extract information that is explicitly stated in the document.
-2. DO NOT invent, guess, or extrapolate missing clients, deadlines, emails, budgets, percentages, or qualifications.
-3. If a field is not stated in the document, return null or empty array [].
-4. Distinguish Out of Scope / Exclusions from required Scope / Tasks.
-5. Capture exact submission deadlines and emails from their contextual sections (distinguish submission email vs query/clarification email).
+RULES:
+1. If client name is not in the document, set it to null.
+2. If submission deadline is not stated, set it to null.
+3. Do NOT infer budget, qualifications, or requirements not written in the text.
+4. Do NOT guess missing contact emails, addresses, or person names.
+5. For each field, state exactly what the TOR says. If it says nothing, return null or [].
+6. Capture Out-of-Scope exclusions separately from Scope requirements.
 
 Return ONLY valid JSON matching this schema:
 {
@@ -745,4 +743,3 @@ Return ONLY valid JSON matching this schema:
     };
   }
 }
-
