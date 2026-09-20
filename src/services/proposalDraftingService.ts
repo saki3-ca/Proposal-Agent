@@ -371,8 +371,15 @@ Generate the structured proposal blocks now as JSON array.`;
     try {
       const rawAiResponse = await AiService.callGroqApi(userPrompt, systemPrompt);
       generatedBlocks = ProposalDraftingService.parseBlocksFromResponse(rawAiResponse, contextPkg);
+      if (!generatedBlocks || generatedBlocks.length === 0) {
+        generatedBlocks = ProposalDraftingService.generateFallbackBlocks(contextPkg);
+      }
     } catch (e: any) {
       console.warn(`LLM drafting call failed for section ${targetSection.sectionNumber}, generating deterministic evidence-grounded fallback blocks:`, e?.message);
+      generatedBlocks = ProposalDraftingService.generateFallbackBlocks(contextPkg);
+    }
+
+    if (!generatedBlocks || generatedBlocks.length === 0) {
       generatedBlocks = ProposalDraftingService.generateFallbackBlocks(contextPkg);
     }
 

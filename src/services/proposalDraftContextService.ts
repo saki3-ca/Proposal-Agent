@@ -87,7 +87,8 @@ export class ProposalDraftContextService {
     const houseStyle = HouseStyleService.getActiveProfile();
     const evidencePkg = EvidenceMatchingService.getSavedEvidencePackage(projectId);
 
-    const targetId = String(sectionNumberOrId).replace(/^draft_sec_/, '');
+    const secIndexMatch = String(sectionNumberOrId).match(/^draft_sec_(\d+)$/);
+    const parsedIdx = secIndexMatch ? parseInt(secIndexMatch[1], 10) - 1 : -1;
     
     // Check active draft first, then plan, then baseline
     let activeDraft: import('../types').ProposalDraft | null = null;
@@ -96,19 +97,33 @@ export class ProposalDraftContextService {
       if (stored) activeDraft = JSON.parse(stored);
     } catch (e) {}
 
-    const draftSection = (activeDraft?.sections || []).find((s) =>
-      s.id === sectionNumberOrId ||
-      (Boolean(sectionNumberOrId) && Boolean(s.sectionNumber) && s.sectionNumber === sectionNumberOrId) ||
-      (Boolean(targetId) && (s.id === targetId || (Boolean(s.sectionNumber) && s.sectionNumber === targetId))) ||
-      s.title.toLowerCase() === String(sectionNumberOrId).toLowerCase()
-    );
+    let draftSection: import('../types').ProposalDraftSection | undefined;
+    if (activeDraft?.sections && activeDraft.sections.length > 0) {
+      draftSection = activeDraft.sections.find((s) => s.id === sectionNumberOrId);
+      if (!draftSection && parsedIdx >= 0 && parsedIdx < activeDraft.sections.length) {
+        draftSection = activeDraft.sections[parsedIdx];
+      }
+      if (!draftSection) {
+        draftSection = activeDraft.sections.find((s) =>
+          s.title.toLowerCase() === String(sectionNumberOrId).toLowerCase() ||
+          (Boolean(s.sectionNumber) && s.sectionNumber === sectionNumberOrId)
+        );
+      }
+    }
 
-    const planSection = (plan?.sections || []).find((s: ProposalContentPlanSection) =>
-      s.id === sectionNumberOrId ||
-      (Boolean(sectionNumberOrId) && Boolean(s.sectionNumber) && s.sectionNumber === sectionNumberOrId) ||
-      (Boolean(targetId) && (s.id === targetId || (Boolean(s.sectionNumber) && s.sectionNumber === targetId))) ||
-      s.title.toLowerCase() === String(sectionNumberOrId).toLowerCase()
-    );
+    let planSection: ProposalContentPlanSection | undefined;
+    if (plan?.sections && plan.sections.length > 0) {
+      planSection = plan.sections.find((s) => s.id === sectionNumberOrId);
+      if (!planSection && parsedIdx >= 0 && parsedIdx < plan.sections.length) {
+        planSection = plan.sections[parsedIdx];
+      }
+      if (!planSection) {
+        planSection = plan.sections.find((s) =>
+          s.title.toLowerCase() === String(sectionNumberOrId).toLowerCase() ||
+          (Boolean(s.sectionNumber) && s.sectionNumber === sectionNumberOrId)
+        );
+      }
+    }
 
     const baselineSections = [
       { title: 'Cover Page', sectionNumber: '', purpose: 'Formal cover page with client details, assignment title, and secondary firm contact info.' },
@@ -131,12 +146,16 @@ export class ProposalDraftContextService {
       { title: 'Appendices', sectionNumber: '', purpose: 'Supporting annexes, CVs, firm profile, past experience certificates, tax documents, and conflict declarations.' }
     ];
 
-    const baselineMatch = baselineSections.find((b, idx) =>
-      b.title.toLowerCase() === String(sectionNumberOrId).toLowerCase() ||
-      (Boolean(b.sectionNumber) && b.sectionNumber === sectionNumberOrId) ||
-      `draft_sec_${idx + 1}` === sectionNumberOrId ||
-      String(idx + 1) === targetId
-    );
+    let baselineMatch: { title: string; sectionNumber: string; purpose: string } | undefined;
+    if (parsedIdx >= 0 && parsedIdx < baselineSections.length) {
+      baselineMatch = baselineSections[parsedIdx];
+    }
+    if (!baselineMatch) {
+      baselineMatch = baselineSections.find((b) =>
+        b.title.toLowerCase() === String(sectionNumberOrId).toLowerCase() ||
+        (Boolean(b.sectionNumber) && b.sectionNumber === sectionNumberOrId)
+      );
+    }
 
     const resolvedTitle = draftSection?.title || planSection?.title || baselineMatch?.title || 'Proposal Section';
     const resolvedSectionNumber = draftSection?.sectionNumber !== undefined ? draftSection.sectionNumber : (planSection?.sectionNumber !== undefined ? planSection.sectionNumber : (baselineMatch?.sectionNumber || ''));
@@ -146,17 +165,22 @@ export class ProposalDraftContextService {
     let inferredSectionType = planSection?.sectionType || 'TECHNICAL';
     const resolvedTitleLower = resolvedTitle.toLowerCase();
     if (resolvedTitleLower.includes('cover')) inferredSectionType = 'COVER';
-    else if (resolvedTitleLower.includes('letter') || resolvedTitleLower.includes('transmittal')) inferredSectionType = 'TRANSMITTAL';
+    else if (resolvedTitleLower.includes('letter') || resolvedTitleLower.includes('transmittal') || resolvedTitleLower.includes('submission')) inferredSectionType = 'TRANSMITTAL';
     else if (resolvedTitleLower.includes('contents') || resolvedTitleLower.includes('toc')) inferredSectionType = 'TOC';
     else if (resolvedTitleLower.includes('executive summary')) inferredSectionType = 'EXECUTIVE_SUMMARY';
+    else if (resolvedTitleLower.includes('understanding')) inferredSectionType = 'TECHNICAL';
+    else if (resolvedTitleLower.includes('objective')) inferredSectionType = 'TECHNICAL';
+    else if (resolvedTitleLower.includes('scope')) inferredSectionType = 'TECHNICAL';
     else if (resolvedTitleLower.includes('methodology')) inferredSectionType = 'METHODOLOGY';
     else if (resolvedTitleLower.includes('work plan') || resolvedTitleLower.includes('workplan')) inferredSectionType = 'WORKPLAN';
-    else if (resolvedTitleLower.includes('team')) inferredSectionType = 'TEAM';
+    else if (resolvedTitleLower.includes('team') || resolvedTitleLower.includes('expert')) inferredSectionType = 'TEAM';
+    else if (resolvedTitleLower.includes('responsibility')) inferredSectionType = 'RESPONSIBILITY_MATRIX';
+    else if (resolvedTitleLower.includes('quality') || resolvedTitleLower.includes('risk')) inferredSectionType = 'QUALITY';
     else if (resolvedTitleLower.includes('deliverable')) inferredSectionType = 'DELIVERABLES';
-    else if (resolvedTitleLower.includes('timeline')) inferredSectionType = 'TIMELINE';
-    else if (resolvedTitleLower.includes('experience')) inferredSectionType = 'EXPERIENCE';
-    else if (resolvedTitleLower.includes('about')) inferredSectionType = 'ABOUT_FIRM';
-    else if (resolvedTitleLower.includes('conclusion')) inferredSectionType = 'CONCLUSION';
+    else if (resolvedTitleLower.includes('timeline') || resolvedTitleLower.includes('schedule')) inferredSectionType = 'TIMELINE';
+    else if (resolvedTitleLower.includes('experience') || resolvedTitleLower.includes('track record')) inferredSectionType = 'EXPERIENCE';
+    else if (resolvedTitleLower.includes('about') || resolvedTitleLower.includes('firm')) inferredSectionType = 'ABOUT_FIRM';
+    else if (resolvedTitleLower.includes('conclusion') || resolvedTitleLower.includes('closing')) inferredSectionType = 'CONCLUSION';
     else if (resolvedTitleLower.includes('appendic') || resolvedTitleLower.includes('annex')) inferredSectionType = 'APPENDIX';
 
     const section = {
