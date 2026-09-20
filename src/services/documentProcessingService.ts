@@ -1,4 +1,4 @@
-npm run buildexport interface ProcessingQuality {
+export interface ProcessingQuality {
   score: number;
   status: 'good' | 'acceptable' | 'poor' | 'failed';
   characterCount: number;
