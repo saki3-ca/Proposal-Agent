@@ -21,9 +21,5 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
-    target: 'esnext',
-  },
-  optimizeDeps: {
-    include: ['pdfjs-dist'],
   },
 });

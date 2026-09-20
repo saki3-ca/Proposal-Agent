@@ -1,15 +1,4 @@
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import JSZip from 'jszip';
-
-// Configure pdfjs worker
-try {
-  if (typeof window !== 'undefined') {
-    // Use unpkg/cdnjs worker CDN matching installed version to avoid Vite worker bundle path issues
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version || '4.10.38'}/build/pdf.worker.min.mjs`;
-  }
-} catch (e) {
-  console.warn('[ClientDocumentParser] Could not set workerSrc:', e);
-}
 
 export interface ClientExtractionResult {
   markdown: string;
@@ -17,6 +6,48 @@ export interface ClientExtractionResult {
   wordCount: number;
   charCount: number;
   source: 'client_pdfjs' | 'client_docx' | 'client_text' | 'client_stream';
+}
+
+/**
+ * Ensures PDF.js library is loaded in the browser window on demand without bundler conflicts.
+ */
+async function loadPdfJsInBrowser(): Promise<any> {
+  if (typeof window === 'undefined') return null;
+
+  if ((window as any).pdfjsLib) {
+    return (window as any).pdfjsLib;
+  }
+
+  return new Promise((resolve, reject) => {
+    const existingScript = document.getElementById('pdfjs-cdn-script');
+    if (existingScript) {
+      existingScript.addEventListener('load', () => resolve((window as any).pdfjsLib));
+      existingScript.addEventListener('error', (e) => reject(e));
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.id = 'pdfjs-cdn-script';
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    script.async = true;
+
+    script.onload = () => {
+      const pdfjs = (window as any).pdfjsLib;
+      if (pdfjs) {
+        pdfjs.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        resolve(pdfjs);
+      } else {
+        reject(new Error('PDF.js loaded but window.pdfjsLib is undefined'));
+      }
+    };
+
+    script.onerror = (err) => {
+      console.warn('[ClientDocumentParser] Failed to load PDF.js from CDN:', err);
+      reject(err);
+    };
+
+    document.head.appendChild(script);
+  });
 }
 
 export class ClientDocumentParser {
@@ -60,76 +91,80 @@ export class ClientDocumentParser {
   }
 
   /**
-   * Extracts formatted text and layout from PDF using PDF.js with regex stream fallback
+   * Extracts formatted text and layout from PDF using browser PDF.js with regex stream fallback
    */
   static async extractPdfText(file: File): Promise<ClientExtractionResult> {
     const arrayBuffer = await file.arrayBuffer();
 
+    // 1. Try browser PDF.js
     try {
-      const loadingTask = pdfjsLib.getDocument({
-        data: new Uint8Array(arrayBuffer),
-        useSystemFonts: true
-      });
+      const pdfjs = await loadPdfJsInBrowser();
+      if (pdfjs) {
+        const loadingTask = pdfjs.getDocument({
+          data: new Uint8Array(arrayBuffer),
+          useSystemFonts: true
+        });
 
-      const pdf = await loadingTask.promise;
-      const numPages = pdf.numPages;
-      const pageTexts: string[] = [];
+        const pdf = await loadingTask.promise;
+        const numPages = pdf.numPages;
+        const pageTexts: string[] = [];
 
-      for (let pageNum = 1; pageNum <= numPages; pageNum++) {
-        const page = await pdf.getPage(pageNum);
-        const textContent = await page.getTextContent();
-        
-        let lastY: number | null = null;
-        let pageStr = '';
-
-        for (const item of textContent.items as any[]) {
-          if (!('str' in item)) continue;
+        for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+          const page = await pdf.getPage(pageNum);
+          const textContent = await page.getTextContent();
           
-          // Check for line break based on Y-coordinate shift
-          if (lastY !== null && Math.abs(item.transform[5] - lastY) > 5) {
-            pageStr += '\n';
-          } else if (pageStr.length > 0 && !pageStr.endsWith(' ') && !pageStr.endsWith('\n')) {
-            pageStr += ' ';
+          let lastY: number | null = null;
+          let pageStr = '';
+
+          for (const item of textContent.items as any[]) {
+            if (!('str' in item)) continue;
+            
+            // Line break detection based on vertical shift
+            if (lastY !== null && Math.abs(item.transform[5] - lastY) > 5) {
+              pageStr += '\n';
+            } else if (pageStr.length > 0 && !pageStr.endsWith(' ') && !pageStr.endsWith('\n')) {
+              pageStr += ' ';
+            }
+
+            pageStr += item.str;
+            lastY = item.transform[5];
           }
 
-          pageStr += item.str;
-          lastY = item.transform[5];
+          const cleanPageText = pageStr.trim();
+          if (cleanPageText) {
+            pageTexts.push(cleanPageText);
+          }
         }
 
-        const cleanPageText = pageStr.trim();
-        if (cleanPageText) {
-          pageTexts.push(cleanPageText);
+        const fullMarkdown = pageTexts.join('\n\n---\n\n');
+
+        if (fullMarkdown.trim().length > 50) {
+          return {
+            markdown: fullMarkdown,
+            pageCount: numPages,
+            wordCount: fullMarkdown.split(/\s+/).filter(Boolean).length,
+            charCount: fullMarkdown.length,
+            source: 'client_pdfjs'
+          };
         }
-      }
-
-      const fullMarkdown = pageTexts.join('\n\n---\n\n');
-
-      if (fullMarkdown.trim().length > 50) {
-        return {
-          markdown: fullMarkdown,
-          pageCount: numPages,
-          wordCount: fullMarkdown.split(/\s+/).filter(Boolean).length,
-          charCount: fullMarkdown.length,
-          source: 'client_pdfjs'
-        };
       }
     } catch (pdfjsErr) {
-      console.warn('[ClientDocumentParser] PDF.js extraction encountered issue, attempting fallback stream extraction:', pdfjsErr);
+      console.warn('[ClientDocumentParser] Browser PDF.js extraction notice, trying stream fallback:', pdfjsErr);
     }
 
-    // Fallback: Raw byte stream text extraction for simple/uncompressed PDF text streams
+    // 2. Fallback: Fast client-side byte stream text extraction
     const streamText = this.extractPdfStreamFallback(arrayBuffer);
-    if (streamText.length > 100) {
+    if (streamText.length > 80) {
       return {
         markdown: streamText,
-        pageCount: 1,
+        pageCount: Math.max(1, Math.ceil(streamText.length / 2500)),
         wordCount: streamText.split(/\s+/).filter(Boolean).length,
         charCount: streamText.length,
         source: 'client_stream'
       };
     }
 
-    throw new Error(`Could not extract readable text from PDF "${file.name}". The document may be a scanned image or encrypted.`);
+    throw new Error(`Could not extract readable text from PDF "${file.name}". If this is a scanned document, please upload a digital PDF or DOCX file.`);
   }
 
   /**
@@ -173,7 +208,7 @@ export class ClientDocumentParser {
       }
     }
 
-    // Try reading page count from app.xml if available
+    // Read page count from docProps/app.xml if available
     let pageCount = 1;
     try {
       const appXmlFile = zip.file('docProps/app.xml');
