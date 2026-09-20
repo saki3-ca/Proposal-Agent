@@ -88,7 +88,7 @@ export class ProposalDraftContextService {
     const evidencePkg = EvidenceMatchingService.getSavedEvidencePackage(projectId);
 
     const secIndexMatch = String(sectionNumberOrId).match(/^draft_sec_(\d+)$/);
-    const parsedIdx = secIndexMatch ? parseInt(secIndexMatch[1], 10) - 1 : -1;
+    let parsedIdx = secIndexMatch ? parseInt(secIndexMatch[1], 10) - 1 : -1;
     
     // Check active draft first, then plan, then baseline
     let activeDraft: import('../types').ProposalDraft | null = null;
@@ -99,8 +99,11 @@ export class ProposalDraftContextService {
 
     let draftSection: import('../types').ProposalDraftSection | undefined;
     if (activeDraft?.sections && activeDraft.sections.length > 0) {
-      draftSection = activeDraft.sections.find((s) => s.id === sectionNumberOrId);
-      if (!draftSection && parsedIdx >= 0 && parsedIdx < activeDraft.sections.length) {
+      const draftSecIdx = activeDraft.sections.findIndex((s) => s.id === sectionNumberOrId);
+      if (draftSecIdx >= 0) {
+        draftSection = activeDraft.sections[draftSecIdx];
+        if (parsedIdx < 0) parsedIdx = draftSecIdx;
+      } else if (parsedIdx >= 0 && parsedIdx < activeDraft.sections.length) {
         draftSection = activeDraft.sections[parsedIdx];
       }
       if (!draftSection) {
@@ -111,11 +114,19 @@ export class ProposalDraftContextService {
       }
     }
 
+    const rawIdWithoutPrefix = String(sectionNumberOrId).replace(/^draft_sec_/, '');
+
     let planSection: ProposalContentPlanSection | undefined;
     if (plan?.sections && plan.sections.length > 0) {
-      planSection = plan.sections.find((s) => s.id === sectionNumberOrId);
+      planSection = plan.sections.find((s) => s.id === sectionNumberOrId || s.id === rawIdWithoutPrefix);
       if (!planSection && parsedIdx >= 0 && parsedIdx < plan.sections.length) {
         planSection = plan.sections[parsedIdx];
+      }
+      if (!planSection && draftSection) {
+        planSection = plan.sections.find((s) =>
+          s.title.toLowerCase() === draftSection!.title.toLowerCase() ||
+          (Boolean(s.sectionNumber) && Boolean(draftSection!.sectionNumber) && s.sectionNumber === draftSection!.sectionNumber)
+        );
       }
       if (!planSection) {
         planSection = plan.sections.find((s) =>
@@ -149,6 +160,12 @@ export class ProposalDraftContextService {
     let baselineMatch: { title: string; sectionNumber: string; purpose: string } | undefined;
     if (parsedIdx >= 0 && parsedIdx < baselineSections.length) {
       baselineMatch = baselineSections[parsedIdx];
+    }
+    if (!baselineMatch && draftSection) {
+      baselineMatch = baselineSections.find((b) =>
+        b.title.toLowerCase() === draftSection!.title.toLowerCase() ||
+        (Boolean(b.sectionNumber) && Boolean(draftSection!.sectionNumber) && b.sectionNumber === draftSection!.sectionNumber)
+      );
     }
     if (!baselineMatch) {
       baselineMatch = baselineSections.find((b) =>
@@ -194,7 +211,12 @@ export class ProposalDraftContextService {
       prohibitedContent: planSection?.prohibitedContent || []
     };
 
-    const sectionMappings = (plan?.requirementMappings || []).filter((m: ProposalRequirementMapping) => m.proposalSectionId === section.id);
+    const sectionMappings = (plan?.requirementMappings || []).filter(
+      (m: ProposalRequirementMapping) =>
+        m.proposalSectionId === section.id ||
+        m.proposalSectionId === rawIdWithoutPrefix ||
+        (draftSection && m.proposalSectionId === draftSection.id)
+    );
     const mappedReqs = sectionMappings.map((m: ProposalRequirementMapping) => {
       const r = requirements.find((req) => req.id === m.requirementId);
       return {
@@ -211,7 +233,10 @@ export class ProposalDraftContextService {
     const matches = evidencePkg?.matches || [];
     const sectionMatches = matches.filter(
       (m) =>
-        (m.proposalSectionId === section.id || (section.torRequirementIds || []).includes(m.requirementId)) &&
+        (m.proposalSectionId === section.id ||
+          m.proposalSectionId === rawIdWithoutPrefix ||
+          (draftSection && m.proposalSectionId === draftSection.id) ||
+          (section.torRequirementIds || []).includes(m.requirementId)) &&
         (m.verificationStatus === 'VERIFIED' || m.status === 'AVAILABLE')
     );
 
@@ -239,7 +264,7 @@ export class ProposalDraftContextService {
     const teamEv = teamRecords.length > 0
       ? teamRecords.map((t) => ({
         roleName: t.title || 'Audit Specialist',
-        candidateName: t.sourceFile.replace(/\.[^/.]+$/, ''),
+        candidateName: (t.sourceFile || t.title || 'Key Expert').replace(/\.[^/.]+$/, ''),
         qualificationMatchStatus: t.verificationStatus || 'VERIFIED',
         yearsOfExperience: 10
       }))
