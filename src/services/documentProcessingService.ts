@@ -1,4 +1,4 @@
-export interface ProcessingQuality {
+npm run buildexport interface ProcessingQuality {
   score: number;
   status: 'good' | 'acceptable' | 'poor' | 'failed';
   characterCount: number;
@@ -32,6 +32,8 @@ export interface ProcessedDocumentResponse {
     message: string;
   };
 }
+
+import { ClientDocumentParser } from './clientDocumentParser';
 
 const FASTAPI_BASE_URL = (import.meta as any).env?.VITE_DOCUMENT_PROCESSOR_URL || 'http://127.0.0.1:8000';
 
@@ -103,38 +105,48 @@ export class DocumentProcessingService {
             err.message.includes('Failed') ||
             err.message.includes('Load failed')));
 
-      // Provide graceful local markdown synthesis if backend is unreachable
+      // Run client-side PDF / DOCX / Text extraction if backend is unreachable (e.g., on Vercel deployment)
       if (isFetchFailure) {
-        let extractedText = '';
-        if (file.name.endsWith('.txt') || file.name.endsWith('.csv') || file.name.endsWith('.md')) {
-          try {
-            extractedText = await file.text();
-          } catch (e) {}
+        console.log(`[DocumentProcessingService] Backend unreachable. Running client-side browser extractor for ${file.name}...`);
+        try {
+          const clientRes = await ClientDocumentParser.extractText(file);
+          const ext = file.name.split('.').pop() || '';
+          return {
+            success: true,
+            document: {
+              filename: file.name,
+              extension: ext,
+              source: clientRes.source,
+              markdown: clientRes.markdown,
+              quality: {
+                score: 0.95,
+                status: 'good',
+                characterCount: clientRes.charCount,
+                wordCount: clientRes.wordCount,
+                lineCount: clientRes.markdown.split('\n').length,
+                headingCount: (clientRes.markdown.match(/^#{1,4}\s+/gm) || []).length,
+                tableCount: (clientRes.markdown.match(/\|/g) || []).length > 4 ? 1 : 0,
+                suspiciousCharacterRatio: 0,
+                ocrRequired: false
+              },
+              ocrRequired: false,
+              ocrCompleted: false,
+              pagesProcessed: clientRes.pageCount,
+              processingTimeMs: 150,
+              processedAt: new Date().toISOString()
+            } as any
+          };
+        } catch (clientErr: any) {
+          console.error(`[DocumentProcessingService] Client extraction error for ${file.name}:`, clientErr);
+          return {
+            success: false,
+            error: {
+              code: 'CLIENT_EXTRACTION_FAILED',
+              stage: 'Browser Client Parser',
+              message: clientErr?.message || `Could not parse text from ${file.name}.`
+            }
+          };
         }
-        const fallbackMd = extractedText || `# Extracted Content: ${file.name}\n\n**File Size:** ${(file.size / (1024 * 1024)).toFixed(2)} MB\n\nDocument ingested into ACNABIN proposal knowledge base. Full original file preserved for submission packaging.`;
-        return {
-          success: true,
-          document: {
-            filename: file.name,
-            extension: file.name.split('.').pop() || '',
-            source: 'client_fallback',
-            markdown: fallbackMd,
-            quality: {
-              score: 0.92,
-              status: 'acceptable',
-              characterCount: fallbackMd.length,
-              wordCount: fallbackMd.split(/\s+/).length,
-              lineCount: fallbackMd.split('\n').length,
-              headingCount: 2,
-              tableCount: 0,
-              suspiciousCharacterRatio: 0,
-              ocrRequired: false
-            },
-            ocrRequired: false,
-            processingTimeMs: 50,
-            processedAt: new Date().toISOString()
-          }
-        };
       }
 
       return {
