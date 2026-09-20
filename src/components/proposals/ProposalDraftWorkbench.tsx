@@ -90,7 +90,7 @@ export const ProposalDraftWorkbench: React.FC<ProposalDraftWorkbenchProps> = ({ 
   // Initialize or fetch draft
   useEffect(() => {
     let loaded = ProposalDraftingService.getProposalDraft(projectId);
-    if (!loaded) {
+    if (!loaded || !loaded.sections || loaded.sections.length === 0) {
       loaded = ProposalDraftingService.initializeDraftFromPlan(projectId);
     }
     setDraft(loaded);
@@ -149,25 +149,34 @@ export const ProposalDraftWorkbench: React.FC<ProposalDraftWorkbenchProps> = ({ 
       const total = currentDraft.sections.length;
 
       const execSummary = currentDraft.sections.find((s) => s.title.toLowerCase().includes('executive summary'));
-      const sectionsToDraft = currentDraft.sections.filter((s) => s !== execSummary && s.status !== 'APPROVED');
+      const sectionsToDraft = currentDraft.sections.filter((s) => s.id !== execSummary?.id && s.status !== 'APPROVED');
 
       let currentStep = 1;
       for (const sec of sectionsToDraft) {
         setDraftingProgressText(`Drafting (${currentStep++}/${total}): ${sec.title}...`);
-        const res = await ProposalDraftingService.draftSection(projectId, sec.id);
-        setDraft({ ...res.draft });
+        try {
+          const res = await ProposalDraftingService.draftSection(projectId, sec.id);
+          setDraft({ ...res.draft });
+        } catch (secErr: any) {
+          console.warn(`Error drafting section ${sec.title}:`, secErr);
+        }
       }
 
       if (execSummary && execSummary.status !== 'APPROVED') {
         setDraftingProgressText(`Finalizing Executive Summary (${total}/${total})...`);
-        const res = await ProposalDraftingService.draftSection(projectId, execSummary.id);
-        setDraft({ ...res.draft });
+        try {
+          const res = await ProposalDraftingService.draftSection(projectId, execSummary.id);
+          setDraft({ ...res.draft });
+        } catch (execErr: any) {
+          console.warn(`Error drafting executive summary:`, execErr);
+        }
       }
 
       const finalized = ProposalDraftingService.getProposalDraft(projectId);
       if (finalized) setDraft(finalized);
     } catch (e: any) {
-      alert(`Proposal drafting error: ${e?.message || e}`);
+      console.error('Proposal batch drafting error:', e);
+      alert(`Proposal drafting notice: ${e?.message || e}`);
     } finally {
       setIsDraftingAll(false);
       setDraftingProgressText('');

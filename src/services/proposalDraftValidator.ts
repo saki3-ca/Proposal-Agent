@@ -103,10 +103,11 @@ export class ProposalDraftValidator {
   ): Promise<SectionValidationResult> {
     const rawReqs: AuditableRequirement[] = mappedReqs.length > 0 ? mappedReqs : (context.mappedRequirements as AuditableRequirement[]) || [];
     const activeReqs = rawReqs.filter((r) => Boolean(r && (r.id || r.requirementText)));
-    const fullText = section.content
+    const contentBlocks = section.content || [];
+    const fullText = contentBlocks
       .map((b) => {
         const itemText = b.items && b.items.length > 0 ? b.items.join(' ') : '';
-        return `${b.content} ${itemText}`.trim();
+        return `${b.content || ''} ${itemText}`.trim();
       })
       .join('\n');
 
@@ -114,7 +115,7 @@ export class ProposalDraftValidator {
     let unaddressedReqIds: string[] = [];
 
     // Attempt Fast Semantic LLM Evaluation if requirements exist
-    if (activeReqs.length > 0 && section.content.length > 0) {
+    if (activeReqs.length > 0 && contentBlocks.length > 0) {
       try {
         const evalPrompt = `Evaluate if this proposal section substantively addresses each listed TOR requirement.
 Section Title: ${section.title}
@@ -132,7 +133,7 @@ Return ONLY JSON:
         const rawResponse = await AiService.callGroqApi(
           evalPrompt,
           'You are a strict proposal compliance auditor. Return valid JSON only.',
-          'openai/gpt-oss-120b'
+          'llama-3.3-70b-versatile'
         );
 
         let jsonStr = rawResponse.trim();
@@ -176,10 +177,11 @@ Return ONLY JSON:
   ): SectionValidationResult {
     const rawReqs: AuditableRequirement[] = mappedReqs.length > 0 ? mappedReqs : (context.mappedRequirements as AuditableRequirement[]) || [];
     const activeReqs = rawReqs.filter((r) => Boolean(r && (r.id || r.requirementText)));
-    const fullText = section.content
+    const contentBlocks = section.content || [];
+    const fullText = contentBlocks
       .map((b) => {
         const itemText = b.items && b.items.length > 0 ? b.items.join(' ') : '';
-        return `${b.content} ${itemText}`.trim();
+        return `${b.content || ''} ${itemText}`.trim();
       })
       .join('\n');
 
@@ -209,11 +211,11 @@ Return ONLY JSON:
     const totalReqsCount = activeReqs.length;
     const completenessScore = totalReqsCount > 0
       ? Math.round((addressedReqIds.length / totalReqsCount) * 100)
-      : (section.content.length > 0 ? 100 : 0);
+      : ((section.content || []).length > 0 ? 100 : 0);
 
     // Placeholder Detection
-    const placeholderBlocks = section.content.filter(
-      (b) => b.type === 'PLACEHOLDER' || b.content.includes('[TO BE PROVIDED')
+    const placeholderBlocks = (section.content || []).filter(
+      (b) => b.type === 'PLACEHOLDER' || (b.content && b.content.includes('[TO BE PROVIDED'))
     );
     const placeholderCount = placeholderBlocks.length;
 

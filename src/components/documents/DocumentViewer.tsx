@@ -340,19 +340,58 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({ document: doc, o
       {/* TAB 2: EXTRACTED MARKDOWN & PARSED TEXT */}
       {activeTab === 'markdown' && (
         <div className="bg-white rounded-lg border border-slate-200 shadow-2xs p-6 space-y-4">
-          <div className="p-3 bg-teal-50 border border-teal-200 rounded-lg text-teal-900 text-xs flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <FileCode className="w-4 h-4 text-[#1D8C8C]" />
-              <span className="font-semibold">
-                MarkItDown Structure & OCR Conversion Complete — Fully Grounded for AI Drafting
-              </span>
+          <div className="p-4 bg-gradient-to-r from-teal-50 to-indigo-50/40 border border-teal-200 rounded-xl text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center space-x-2 text-teal-900 font-bold">
+                <FileCode className="w-4 h-4 text-[#1D8C8C]" />
+                <span>Full Markdown Extract — Grounded for AI Drafting & LLM Prompts</span>
+              </div>
+              <p className="text-[11px] text-slate-600">
+                You can copy this complete Markdown text to paste into ChatGPT, Claude, Gemini, or any LLM to draft proposal sections.
+              </p>
             </div>
-            <span className="font-mono font-bold text-[#1D8C8C]">
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={handleCopyMarkdown}
+                className="px-3.5 py-1.5 bg-[#1D8C8C] hover:bg-[#156d6d] text-white text-xs font-bold rounded-lg transition-colors flex items-center space-x-1.5 shadow-xs"
+                title="Copy entire document Markdown to clipboard"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                <span>{copied ? '✓ Copied Full MD!' : 'Copy Full Markdown'}</span>
+              </button>
+
+              <button
+                onClick={handleDownloadMarkdown}
+                className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 text-xs font-semibold rounded-lg transition-colors flex items-center space-x-1.5"
+                title="Download .md file"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Download .md</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Document Stats Bar */}
+          <div className="flex items-center space-x-4 text-[11px] text-slate-500 font-mono bg-slate-50 px-3 py-2 rounded-lg border border-slate-200">
+            <span>
+              <strong>Words:</strong> {(doc.markdownContent || '').trim().split(/\s+/).filter(Boolean).length.toLocaleString()}
+            </span>
+            <span>•</span>
+            <span>
+              <strong>Characters:</strong> {(doc.markdownContent || '').length.toLocaleString()}
+            </span>
+            <span>•</span>
+            <span>
+              <strong>Lines:</strong> {(doc.markdownContent || '').split('\n').length}
+            </span>
+            <span>•</span>
+            <span className="text-emerald-700 font-bold">
               AI Match Confidence: {((doc.aiConfidence || 0.95) * 100).toFixed(0)}%
             </span>
           </div>
 
-          <pre className="whitespace-pre-wrap font-mono text-xs bg-slate-50 p-5 rounded-lg border border-slate-200 text-slate-900 max-h-[600px] overflow-y-auto leading-relaxed">
+          <pre className="whitespace-pre-wrap font-mono text-xs bg-slate-900 text-slate-100 p-5 rounded-xl border border-slate-800 max-h-[650px] overflow-y-auto leading-relaxed select-text shadow-inner">
             {doc.markdownContent || `# Extracted Content for ${doc.fileName}\n\nDocument text indexed for proposal requirement matching.`}
           </pre>
         </div>

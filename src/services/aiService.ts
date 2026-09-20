@@ -39,14 +39,20 @@ export class AiService {
   static async callGroqApi(
     prompt: string,
     systemInstruction: string = 'You are ACNABIN proposal drafting assistant.',
-    model: string = 'openai/gpt-oss-120b'
+    model: string = 'llama-3.3-70b-versatile'
   ): Promise<string> {
     const apiKey = this.getGroqApiKey();
     if (!apiKey || apiKey === 'your_groq_api_key_here') {
       throw new Error('Groq API Key not configured in environment.');
     }
 
-    const candidateModels = [model, 'openai/gpt-oss-120b', 'qwen/qwen3.6-27b', 'groq/compound'];
+    const candidateModels = [
+      model,
+      'llama-3.3-70b-versatile',
+      'llama-3.1-8b-instant',
+      'mixtral-8x7b-32768',
+      'gemma2-9b-it'
+    ];
     const uniqueModels = Array.from(new Set(candidateModels));
 
     let lastError: Error | null = null;

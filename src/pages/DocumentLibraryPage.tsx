@@ -34,7 +34,8 @@ import {
   MinusSquare,
   PackageCheck,
   X,
-  RefreshCw
+  RefreshCw,
+  Copy
 } from 'lucide-react';
 
 export type LibraryCategory =
@@ -78,6 +79,8 @@ export const DocumentLibraryPage: React.FC = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'table' | 'folder'>('table');
   const [selectedFolder, setSelectedFolder] = useState<string>('ALL');
   const [duplicateNotice, setDuplicateNotice] = useState<string | null>(null);
+  const [copiedDocId, setCopiedDocId] = useState<string | null>(null);
+  const [isDbLoaded, setIsDbLoaded] = useState(false);
 
   // Bulk selection state
   const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
@@ -94,25 +97,32 @@ export const DocumentLibraryPage: React.FC = () => {
         }
       } catch (err) {
         console.warn('Could not load from IndexedDB, using in-memory state:', err);
+      } finally {
+        setIsDbLoaded(true);
       }
     };
     loadFromIndexedDB();
   }, []);
 
-  // Sync to IndexedDB and lightweight localStorage metadata on changes
+  // Sync to IndexedDB and localStorage metadata on changes (only after initial DB load)
   useEffect(() => {
+    if (!isDbLoaded) return;
     DocumentStorageService.saveLibraryDocuments(documents);
     try {
-      // Store lightweight version in localStorage (without massive markdown if too large)
-      const lightweight = documents.map((d) => ({
-        ...d,
-        markdownContent: (d.markdownContent || '').slice(0, 500)
-      }));
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(lightweight));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(documents));
     } catch (e) {
-      console.warn('LocalStorage quota reached; IndexedDB retains complete document records safely.');
+      // If localStorage quota reached, save metadata version in localStorage, while IndexedDB keeps full markdown
+      try {
+        const lightweight = documents.map((d) => ({
+          ...d,
+          markdownContent: (d.markdownContent || '').slice(0, 500)
+        }));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(lightweight));
+      } catch (e2) {
+        console.warn('LocalStorage quota reached; IndexedDB retains complete document records safely.');
+      }
     }
-  }, [documents]);
+  }, [documents, isDbLoaded]);
 
   const categories: { id: LibraryCategory; label: string; icon: any }[] = [
     { id: 'ALL', label: 'All Documents', icon: FolderOpen },
@@ -228,13 +238,12 @@ export const DocumentLibraryPage: React.FC = () => {
     setTimeout(() => setDuplicateNotice(null), 4000);
   };
 
-  const handleClearAllDocuments = async () => {
-    if (window.confirm('Are you sure you want to clear ALL documents from the library? You will start from zero.')) {
-      setDocuments([]);
-      setSelectedDocIds(new Set());
-      await DocumentStorageService.clearAllLibraryDocuments();
-      localStorage.removeItem(STORAGE_KEY);
-      setSelectedDoc(null);
+  const handleCopyDocMarkdown = (doc: LibraryDocumentItem, e?: React.SyntheticEvent) => {
+    if (e) e.stopPropagation();
+    if (doc.markdownContent) {
+      navigator.clipboard.writeText(doc.markdownContent);
+      setCopiedDocId(doc.id);
+      setTimeout(() => setCopiedDocId(null), 2500);
     }
   };
 
@@ -447,15 +456,6 @@ export const DocumentLibraryPage: React.FC = () => {
             >
               <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600" />
               <span>Clean Duplicates</span>
-            </button>
-
-            <button
-              onClick={handleClearAllDocuments}
-              className="px-3 py-1.5 text-red-700 hover:text-red-900 bg-red-50 hover:bg-red-100 border border-red-200 rounded text-xs font-semibold transition-colors flex items-center space-x-1.5"
-              title="Clear all documents to start from zero"
-            >
-              <Trash2 className="w-3.5 h-3.5 text-red-600" />
-              <span>Clear All</span>
             </button>
 
             <select
@@ -872,6 +872,18 @@ export const DocumentLibraryPage: React.FC = () => {
                         <td className="text-center">
                           <div className="flex items-center justify-center space-x-1.5">
                             <button
+                              onClick={(e) => handleCopyDocMarkdown(doc, e)}
+                              className={`px-2 py-1 text-[11px] font-semibold rounded transition-colors flex items-center space-x-1 ${
+                                copiedDocId === doc.id
+                                  ? 'bg-emerald-600 text-white font-bold'
+                                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                              }`}
+                              title="Copy extracted Markdown to clipboard"
+                            >
+                              <Copy className="w-3 h-3" />
+                              <span>{copiedDocId === doc.id ? 'Copied!' : 'Copy MD'}</span>
+                            </button>
+                            <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setSelectedDoc(doc);
@@ -1032,7 +1044,20 @@ export const DocumentLibraryPage: React.FC = () => {
                       <span>{doc.pageCount} pgs</span>
                     </div>
 
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-1.5">
+                      <button
+                        onClick={(e) => handleCopyDocMarkdown(doc, e)}
+                        className={`px-2 py-0.5 text-[10px] font-semibold rounded transition-colors flex items-center space-x-1 ${
+                          copiedDocId === doc.id
+                            ? 'bg-emerald-600 text-white font-bold'
+                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                        }`}
+                        title="Copy extracted Markdown"
+                      >
+                        <Copy className="w-2.5 h-2.5" />
+                        <span>{copiedDocId === doc.id ? 'Copied' : 'MD'}</span>
+                      </button>
+
                       <div className="flex items-center space-x-1 text-[#1D8C8C] group-hover:text-[#156d6d] font-bold text-xs">
                         <Eye className="w-3.5 h-3.5" />
                         <span>Inspect</span>
@@ -1110,6 +1135,18 @@ export const DocumentLibraryPage: React.FC = () => {
                         </div>
 
                         <div className="flex items-center space-x-2 shrink-0">
+                          <button
+                            onClick={(e) => handleCopyDocMarkdown(doc, e)}
+                            className={`px-2 py-1 text-xs font-semibold rounded transition-colors flex items-center space-x-1 ${
+                              copiedDocId === doc.id
+                                ? 'bg-emerald-600 text-white font-bold'
+                                : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                            }`}
+                            title="Copy Markdown"
+                          >
+                            <Copy className="w-3 h-3" />
+                            <span>{copiedDocId === doc.id ? 'Copied' : 'Copy MD'}</span>
+                          </button>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();

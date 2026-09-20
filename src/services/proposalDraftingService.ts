@@ -31,7 +31,10 @@ export class ProposalDraftingService {
     try {
       const stored = localStorage.getItem(`${DRAFT_STORAGE_PREFIX}${projectId}`);
       if (stored) {
-        return JSON.parse(stored);
+        const parsed = JSON.parse(stored);
+        if (parsed && Array.isArray(parsed.sections) && parsed.sections.length > 0) {
+          return parsed;
+        }
       }
     } catch (e) {
       console.error(`Error reading draft for project ${projectId}:`, e);
@@ -40,36 +43,89 @@ export class ProposalDraftingService {
   }
 
   /**
-   * Initialize a new proposal draft from the active ProposalContentPlan
+   * Standard ACNABIN Baseline Proposal Sections (18 core sections)
+   */
+  static getStandardBaselineSections(): { title: string; sectionNumber: string; level: number; purpose: string }[] {
+    return [
+      { title: 'Cover Page', sectionNumber: '', level: 1, purpose: 'Formal cover page with client details, assignment title, and secondary firm contact info.' },
+      { title: 'Letter of Submission', sectionNumber: '', level: 1, purpose: 'Formal transmittal letter signed by ACNABIN Engagement Partner.' },
+      { title: 'Table of Contents', sectionNumber: '', level: 1, purpose: 'Native Word Table of Contents field.' },
+      { title: 'Executive Summary', sectionNumber: '', level: 1, purpose: 'High-level synthesis of client understanding, methodology, core annexures, and firm profile.' },
+      { title: 'Understanding of the Assignment and the Client', sectionNumber: '1', level: 1, purpose: 'Demonstrate deep understanding of assignment mandate and client organizational environment.' },
+      { title: 'Objectives of the Assignment', sectionNumber: '2', level: 1, purpose: 'State primary and specific TOR assignment objectives.' },
+      { title: 'Scope of Work', sectionNumber: '3', level: 1, purpose: 'Define exact workstreams, governance annexures, and boundary limits.' },
+      { title: 'Proposed Methodology', sectionNumber: '4', level: 1, purpose: 'Detail step-by-step technical approach, stakeholder consultations, and iterative validation flow.' },
+      { title: 'Detailed Work Plan', sectionNumber: '5', level: 1, purpose: 'Present phase-by-phase activities, key milestones, and timeline schedule table.' },
+      { title: 'Team Composition and Key Experts', sectionNumber: '6', level: 1, purpose: 'Present proposed team roles, profiles, and key responsibilities.' },
+      { title: 'Responsibility Matrix', sectionNumber: '7', level: 1, purpose: 'Define roles & responsibilities matrix between ACNABIN and client key personnel.' },
+      { title: 'Quality Assurance and Risk Management', sectionNumber: '8', level: 1, purpose: 'Detail Baker Tilly quality control framework and risk mitigation table.' },
+      { title: 'Deliverables of the Assignment', sectionNumber: '9', level: 1, purpose: 'List explicit deliverable batches, interim outputs, and final consolidated packages.' },
+      { title: 'Timeline of the Assignment', sectionNumber: '10', level: 1, purpose: 'Gantt chart and schedule of activities over contract duration.' },
+      { title: 'Relevant Firm Experience', sectionNumber: '11', level: 1, purpose: 'Present summary of past similar institutional and advisory assignments delivered by ACNABIN.' },
+      { title: 'About ACNABIN Chartered Accountants', sectionNumber: '12', level: 1, purpose: 'Firm profile, Baker Tilly international affiliation, and quality assurance principles.' },
+      { title: 'Conclusion', sectionNumber: '13', level: 1, purpose: 'Closing commitment, summary of value addition, and formal sign-off.' },
+      { title: 'Appendices', sectionNumber: '', level: 1, purpose: 'Supporting annexes, CVs, firm profile, past experience certificates, tax documents, and conflict declarations.' }
+    ];
+  }
+
+  /**
+   * Initialize a new proposal draft from the active ProposalContentPlan or standard baseline
    */
   static initializeDraftFromPlan(projectId: string): ProposalDraft {
     const plan = ProposalPlannerService.getContentPlan(projectId);
     
-    const draftSections: ProposalDraftSection[] = (plan?.sections || []).map((sec: ProposalContentPlanSection, idx: number) => {
-      const secMappings = (plan?.requirementMappings || []).filter((m) => m.proposalSectionId === sec.id || (sec.torRequirementIds || []).includes(m.requirementId));
-      const secEv = (plan?.evidenceRequirements || []).filter((e) => e.proposalSectionId === sec.id || (sec.evidenceRequirementIds || []).includes(e.id));
+    let draftSections: ProposalDraftSection[] = [];
 
-      return {
-        id: `draft_sec_${sec.id || idx}`,
+    if (plan && plan.sections && plan.sections.length > 0) {
+      draftSections = plan.sections.map((sec: ProposalContentPlanSection, idx: number) => {
+        const secMappings = (plan?.requirementMappings || []).filter((m) => m.proposalSectionId === sec.id || (sec.torRequirementIds || []).includes(m.requirementId));
+        const secEv = (plan?.evidenceRequirements || []).filter((e) => e.proposalSectionId === sec.id || (sec.evidenceRequirementIds || []).includes(e.id));
+
+        return {
+          id: `draft_sec_${sec.id || idx}`,
+          draftId: `draft_${projectId}`,
+          sectionNumber: sec.sectionNumber !== undefined ? sec.sectionNumber : '',
+          title: sec.title,
+          level: sec.level || 1,
+          status: 'NOT_STARTED' as ProposalDraftSectionStatus,
+          content: [],
+          requirementMappings: secMappings,
+          evidenceMappings: secEv.map((ev: ProposalEvidenceRequirement, eIdx: number) => ({
+            id: `ev_map_${sec.id}_${eIdx}`,
+            proposalSectionId: `draft_sec_${sec.id || idx}`,
+            evidenceRecordId: ev.requirementId || ev.id,
+            evidenceType: (ev.evidenceType as any) || 'CORPORATE',
+            usage: 'SUPPORTING_FACT',
+            sourceDocument: ev.description || 'Verified Evidence Record',
+            verificationStatus: ev.status === 'READY_FOR_PHASE_5' ? 'VERIFIED' : 'MISSING',
+            confidence: ev.status === 'READY_FOR_PHASE_5' ? 0.95 : 0.5
+          })),
+          evaluationCriteriaMappings: sec.evaluationCriteriaIds || [],
+          writingBrief: (sec.writingGuidance || []).join(' ') || sec.purpose,
+          evidenceGapCount: 0,
+          unsupportedClaimCount: 0,
+          completenessScore: 0,
+          evidenceCoverageScore: 0,
+          version: 1,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+      });
+    } else {
+      // Fallback to standard 18 baseline sections
+      const baseline = ProposalDraftingService.getStandardBaselineSections();
+      draftSections = baseline.map((sec, idx) => ({
+        id: `draft_sec_${idx + 1}`,
         draftId: `draft_${projectId}`,
-        sectionNumber: sec.sectionNumber !== undefined ? sec.sectionNumber : '',
+        sectionNumber: sec.sectionNumber,
         title: sec.title,
-        level: sec.level || 1,
+        level: sec.level,
         status: 'NOT_STARTED' as ProposalDraftSectionStatus,
         content: [],
-        requirementMappings: secMappings,
-        evidenceMappings: secEv.map((ev: ProposalEvidenceRequirement, eIdx: number) => ({
-          id: `ev_map_${sec.id}_${eIdx}`,
-          proposalSectionId: `draft_sec_${sec.id || idx}`,
-          evidenceRecordId: ev.requirementId || ev.id,
-          evidenceType: (ev.evidenceType as any) || 'CORPORATE',
-          usage: 'SUPPORTING_FACT',
-          sourceDocument: ev.description || 'Verified Evidence Record',
-          verificationStatus: ev.status === 'READY_FOR_PHASE_5' ? 'VERIFIED' : 'MISSING',
-          confidence: ev.status === 'READY_FOR_PHASE_5' ? 0.95 : 0.5
-        })),
-        evaluationCriteriaMappings: sec.evaluationCriteriaIds || [],
-        writingBrief: (sec.writingGuidance || []).join(' ') || sec.purpose,
+        requirementMappings: [],
+        evidenceMappings: [],
+        evaluationCriteriaMappings: [],
+        writingBrief: sec.purpose,
         evidenceGapCount: 0,
         unsupportedClaimCount: 0,
         completenessScore: 0,
@@ -77,8 +133,8 @@ export class ProposalDraftingService {
         version: 1,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
-      };
-    });
+      }));
+    }
 
     let projectTitle = plan?.proposalTitle;
     let clientName = '';
@@ -221,7 +277,9 @@ export class ProposalDraftingService {
       draft = ProposalDraftingService.initializeDraftFromPlan(projectId);
     }
 
-    const secIndex = draft.sections.findIndex((s) => s.id === sectionId || s.sectionNumber === sectionId);
+    const secIndex = draft.sections.findIndex(
+      (s) => s.id === sectionId || (Boolean(sectionId) && Boolean(s.sectionNumber) && s.sectionNumber === sectionId)
+    );
     if (secIndex < 0) {
       throw new Error(`Section ${sectionId} not found in proposal draft.`);
     }
@@ -1004,9 +1062,13 @@ Generate the structured proposal blocks now as JSON array.`;
       draft = ProposalDraftingService.initializeDraftFromPlan(projectId);
     }
 
-    const unstartedSections = draft.sections.filter((s) => s.status === 'NOT_STARTED');
+    const unstartedSections = (draft.sections || []).filter((s) => s.status === 'NOT_STARTED');
     for (const sec of unstartedSections) {
-      await ProposalDraftingService.draftSection(projectId, sec.id);
+      try {
+        await ProposalDraftingService.draftSection(projectId, sec.id);
+      } catch (err) {
+        console.warn(`[ProposalDraftingService] Failed to draft unstarted section ${sec.title}:`, err);
+      }
     }
 
     return ProposalDraftingService.getProposalDraft(projectId) || draft;
@@ -1022,15 +1084,23 @@ Generate the structured proposal blocks now as JSON array.`;
     }
 
     // Process technical sections first, leave Executive Summary for last
-    const execSummarySec = draft.sections.find((s) => s.title.toLowerCase().includes('executive summary'));
-    const otherSections = draft.sections.filter((s) => s !== execSummarySec && s.status !== 'APPROVED');
+    const execSummarySec = (draft.sections || []).find((s) => s.title.toLowerCase().includes('executive summary'));
+    const otherSections = (draft.sections || []).filter((s) => s.id !== execSummarySec?.id && s.status !== 'APPROVED');
 
     for (const sec of otherSections) {
-      await ProposalDraftingService.draftSection(projectId, sec.id);
+      try {
+        await ProposalDraftingService.draftSection(projectId, sec.id);
+      } catch (err) {
+        console.warn(`[ProposalDraftingService] Error drafting section ${sec.title}:`, err);
+      }
     }
 
     if (execSummarySec && execSummarySec.status !== 'APPROVED') {
-      await ProposalDraftingService.draftSection(projectId, execSummarySec.id);
+      try {
+        await ProposalDraftingService.draftSection(projectId, execSummarySec.id);
+      } catch (err) {
+        console.warn(`[ProposalDraftingService] Error drafting executive summary:`, err);
+      }
     }
 
     draft = ProposalDraftingService.getProposalDraft(projectId) || draft;
@@ -1052,9 +1122,10 @@ Generate the structured proposal blocks now as JSON array.`;
     const draft = ProposalDraftingService.getProposalDraft(projectId);
     if (!draft) throw new Error(`Proposal draft for ${projectId} not found.`);
 
-    const sec = draft.sections.find((s) => s.id === sectionId || s.sectionNumber === sectionId);
+    const sec = draft.sections.find((s) => s.id === sectionId || (Boolean(sectionId) && Boolean(s.sectionNumber) && s.sectionNumber === sectionId));
     if (!sec) throw new Error(`Section ${sectionId} not found.`);
 
+    sec.content = sec.content || [];
     const blockIdx = sec.content.findIndex((b) => b.id === blockId);
     if (blockIdx >= 0) {
       sec.content[blockIdx] = {
@@ -1085,9 +1156,10 @@ Generate the structured proposal blocks now as JSON array.`;
     const draft = ProposalDraftingService.getProposalDraft(projectId);
     if (!draft) throw new Error(`Proposal draft for ${projectId} not found.`);
 
-    const sec = draft.sections.find((s) => s.id === sectionId || s.sectionNumber === sectionId);
+    const sec = draft.sections.find((s) => s.id === sectionId || (Boolean(sectionId) && Boolean(s.sectionNumber) && s.sectionNumber === sectionId));
     if (!sec) throw new Error(`Section ${sectionId} not found.`);
 
+    sec.content = sec.content || [];
     const newBlock: ProposalContentBlock = {
       id: `blk_user_${Date.now()}`,
       type,
@@ -1112,10 +1184,10 @@ Generate the structured proposal blocks now as JSON array.`;
     const draft = ProposalDraftingService.getProposalDraft(projectId);
     if (!draft) throw new Error(`Proposal draft for ${projectId} not found.`);
 
-    const sec = draft.sections.find((s) => s.id === sectionId || s.sectionNumber === sectionId);
+    const sec = draft.sections.find((s) => s.id === sectionId || (Boolean(sectionId) && Boolean(s.sectionNumber) && s.sectionNumber === sectionId));
     if (!sec) throw new Error(`Section ${sectionId} not found.`);
 
-    sec.content = sec.content.filter((b) => b.id !== blockId);
+    sec.content = (sec.content || []).filter((b) => b.id !== blockId);
     sec.updatedAt = new Date().toISOString();
 
     ProposalDraftingService.updateDraftOverallMetrics(draft);
@@ -1130,11 +1202,11 @@ Generate the structured proposal blocks now as JSON array.`;
     const draft = ProposalDraftingService.getProposalDraft(projectId);
     if (!draft) throw new Error(`Proposal draft for ${projectId} not found.`);
 
-    const sec = draft.sections.find((s) => s.id === sectionId || s.sectionNumber === sectionId);
+    const sec = draft.sections.find((s) => s.id === sectionId || (Boolean(sectionId) && Boolean(s.sectionNumber) && s.sectionNumber === sectionId));
     if (!sec) throw new Error(`Section ${sectionId} not found.`);
 
     sec.status = 'APPROVED';
-    sec.content.forEach((b) => {
+    (sec.content || []).forEach((b) => {
       if (b.reviewStatus !== 'FLAGGED') {
         b.reviewStatus = 'APPROVED';
       }
@@ -1151,7 +1223,7 @@ Generate the structured proposal blocks now as JSON array.`;
    * Recalculate overall readiness and completeness scores for the proposal
    */
   private static updateDraftOverallMetrics(draft: ProposalDraft): void {
-    if (draft.sections.length === 0) return;
+    if (!draft || !draft.sections || draft.sections.length === 0) return;
 
     let totalCompleteness = 0;
     let totalEvidenceCov = 0;
@@ -1167,11 +1239,13 @@ Generate the structured proposal blocks now as JSON array.`;
       totalUnsupported += sec.unsupportedClaimCount || 0;
 
       // Count placeholders in content
-      const blockPlaceholders = sec.content.filter((b) => b.type === 'PLACEHOLDER' || b.content.includes('[TO BE PROVIDED]')).length;
+      const contentList = sec.content || [];
+      const blockPlaceholders = contentList.filter((b) => b.type === 'PLACEHOLDER' || (b.content && b.content.includes('[TO BE PROVIDED]'))).length;
       totalPlaceholders += blockPlaceholders;
 
-      const addressedReqs = sec.requirementMappings.filter((r) => r.evidenceStatus === 'AVAILABLE' || r.required).length;
-      const totalSecReqs = sec.requirementMappings.length;
+      const secMappings = sec.requirementMappings || [];
+      const addressedReqs = secMappings.filter((r) => r.evidenceStatus === 'AVAILABLE' || r.required).length;
+      const totalSecReqs = secMappings.length;
       if (totalSecReqs > 0) {
         totalReqCov += (addressedReqs / totalSecReqs) * 100;
       } else {

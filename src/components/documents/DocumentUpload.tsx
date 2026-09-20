@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Upload, FileText, CheckCircle2, RefreshCw, FileCode, Plus, Trash2 } from 'lucide-react';
+import { Upload, FileText, CheckCircle2, RefreshCw, FileCode, Plus, Trash2, Copy, Check } from 'lucide-react';
 import { ProjectDocument, ProcessingStatus } from '../../types';
 import { DocumentProcessingService } from '../../services/documentProcessingService';
 import { DocumentStorageService } from '../../services/documentStorageService';
@@ -19,7 +19,17 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   onDelete
 }) => {
   const [isDragOver, setIsDragOver] = useState(false);
+  const [copiedDocId, setCopiedDocId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleCopyMarkdown = (doc: ProjectDocument, e: React.SyntheticEvent) => {
+    e.stopPropagation();
+    if (doc.markdownContent) {
+      navigator.clipboard.writeText(doc.markdownContent);
+      setCopiedDocId(doc.id);
+      setTimeout(() => setCopiedDocId(null), 2500);
+    }
+  };
 
   const processUploadedFiles = async (files: FileList | File[]) => {
     for (const file of Array.from(files)) {
@@ -272,6 +282,18 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
 
                 <div className="shrink-0 flex items-center space-x-2">
                   {getStatusBadge(doc.processingStatus)}
+                  <button
+                    onClick={(e) => handleCopyMarkdown(doc, e)}
+                    className={`px-2.5 py-1 text-xs font-semibold rounded transition-colors flex items-center space-x-1 ${
+                      copiedDocId === doc.id
+                        ? 'bg-emerald-600 text-white font-bold'
+                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                    }`}
+                    title="Copy full extracted Markdown to clipboard"
+                  >
+                    {copiedDocId === doc.id ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedDocId === doc.id ? 'Copied MD' : 'Copy MD'}</span>
+                  </button>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();

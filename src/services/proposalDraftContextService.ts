@@ -88,21 +88,86 @@ export class ProposalDraftContextService {
     const evidencePkg = EvidenceMatchingService.getSavedEvidencePackage(projectId);
 
     const targetId = String(sectionNumberOrId).replace(/^draft_sec_/, '');
-    const section = (plan?.sections || []).find((s: ProposalContentPlanSection) =>
+    
+    // Check active draft first, then plan, then baseline
+    let activeDraft: import('../types').ProposalDraft | null = null;
+    try {
+      const stored = localStorage.getItem(`acnabin_proposal_draft_${projectId}`);
+      if (stored) activeDraft = JSON.parse(stored);
+    } catch (e) {}
+
+    const draftSection = (activeDraft?.sections || []).find((s) =>
       s.id === sectionNumberOrId ||
-      s.id === targetId ||
-      s.sectionNumber === sectionNumberOrId ||
-      s.sectionNumber === targetId ||
+      (Boolean(sectionNumberOrId) && Boolean(s.sectionNumber) && s.sectionNumber === sectionNumberOrId) ||
+      (Boolean(targetId) && (s.id === targetId || (Boolean(s.sectionNumber) && s.sectionNumber === targetId))) ||
       s.title.toLowerCase() === String(sectionNumberOrId).toLowerCase()
-    ) || (plan?.sections || [])[0] || {
-      id: sectionNumberOrId,
-      sectionNumber: sectionNumberOrId,
-      title: 'Proposal Section',
-      sectionType: 'TECHNICAL',
-      purpose: 'Technical Proposal Section',
-      writingGuidance: ['Formal first-person plural'],
-      torRequirementIds: [],
-      prohibitedContent: []
+    );
+
+    const planSection = (plan?.sections || []).find((s: ProposalContentPlanSection) =>
+      s.id === sectionNumberOrId ||
+      (Boolean(sectionNumberOrId) && Boolean(s.sectionNumber) && s.sectionNumber === sectionNumberOrId) ||
+      (Boolean(targetId) && (s.id === targetId || (Boolean(s.sectionNumber) && s.sectionNumber === targetId))) ||
+      s.title.toLowerCase() === String(sectionNumberOrId).toLowerCase()
+    );
+
+    const baselineSections = [
+      { title: 'Cover Page', sectionNumber: '', purpose: 'Formal cover page with client details, assignment title, and secondary firm contact info.' },
+      { title: 'Letter of Submission', sectionNumber: '', purpose: 'Formal transmittal letter signed by ACNABIN Engagement Partner.' },
+      { title: 'Table of Contents', sectionNumber: '', purpose: 'Native Word Table of Contents field.' },
+      { title: 'Executive Summary', sectionNumber: '', purpose: 'High-level synthesis of client understanding, methodology, core annexures, and firm profile.' },
+      { title: 'Understanding of the Assignment and the Client', sectionNumber: '1', purpose: 'Demonstrate deep understanding of assignment mandate and client organizational environment.' },
+      { title: 'Objectives of the Assignment', sectionNumber: '2', purpose: 'State primary and specific TOR assignment objectives.' },
+      { title: 'Scope of Work', sectionNumber: '3', purpose: 'Define exact workstreams, governance annexures, and boundary limits.' },
+      { title: 'Proposed Methodology', sectionNumber: '4', purpose: 'Detail step-by-step technical approach, stakeholder consultations, and iterative validation flow.' },
+      { title: 'Detailed Work Plan', sectionNumber: '5', purpose: 'Present phase-by-phase activities, key milestones, and timeline schedule table.' },
+      { title: 'Team Composition and Key Experts', sectionNumber: '6', purpose: 'Present proposed team roles, profiles, and key responsibilities.' },
+      { title: 'Responsibility Matrix', sectionNumber: '7', purpose: 'Define roles & responsibilities matrix between ACNABIN and client key personnel.' },
+      { title: 'Quality Assurance and Risk Management', sectionNumber: '8', purpose: 'Detail Baker Tilly quality control framework and risk mitigation table.' },
+      { title: 'Deliverables of the Assignment', sectionNumber: '9', purpose: 'List explicit deliverable batches, interim outputs, and final consolidated packages.' },
+      { title: 'Timeline of the Assignment', sectionNumber: '10', purpose: 'Gantt chart and schedule of activities over contract duration.' },
+      { title: 'Relevant Firm Experience', sectionNumber: '11', purpose: 'Present summary of past similar institutional and advisory assignments delivered by ACNABIN.' },
+      { title: 'About ACNABIN Chartered Accountants', sectionNumber: '12', purpose: 'Firm profile, Baker Tilly international affiliation, and quality assurance principles.' },
+      { title: 'Conclusion', sectionNumber: '13', purpose: 'Closing commitment, summary of value addition, and formal sign-off.' },
+      { title: 'Appendices', sectionNumber: '', purpose: 'Supporting annexes, CVs, firm profile, past experience certificates, tax documents, and conflict declarations.' }
+    ];
+
+    const baselineMatch = baselineSections.find((b, idx) =>
+      b.title.toLowerCase() === String(sectionNumberOrId).toLowerCase() ||
+      (Boolean(b.sectionNumber) && b.sectionNumber === sectionNumberOrId) ||
+      `draft_sec_${idx + 1}` === sectionNumberOrId ||
+      String(idx + 1) === targetId
+    );
+
+    const resolvedTitle = draftSection?.title || planSection?.title || baselineMatch?.title || 'Proposal Section';
+    const resolvedSectionNumber = draftSection?.sectionNumber !== undefined ? draftSection.sectionNumber : (planSection?.sectionNumber !== undefined ? planSection.sectionNumber : (baselineMatch?.sectionNumber || ''));
+    const resolvedPurpose = draftSection?.writingBrief || planSection?.purpose || baselineMatch?.purpose || 'Technical Proposal Section';
+    const resolvedWritingGuidance = planSection?.writingGuidance || ['Formal first-person plural'];
+
+    let inferredSectionType = planSection?.sectionType || 'TECHNICAL';
+    const resolvedTitleLower = resolvedTitle.toLowerCase();
+    if (resolvedTitleLower.includes('cover')) inferredSectionType = 'COVER';
+    else if (resolvedTitleLower.includes('letter') || resolvedTitleLower.includes('transmittal')) inferredSectionType = 'TRANSMITTAL';
+    else if (resolvedTitleLower.includes('contents') || resolvedTitleLower.includes('toc')) inferredSectionType = 'TOC';
+    else if (resolvedTitleLower.includes('executive summary')) inferredSectionType = 'EXECUTIVE_SUMMARY';
+    else if (resolvedTitleLower.includes('methodology')) inferredSectionType = 'METHODOLOGY';
+    else if (resolvedTitleLower.includes('work plan') || resolvedTitleLower.includes('workplan')) inferredSectionType = 'WORKPLAN';
+    else if (resolvedTitleLower.includes('team')) inferredSectionType = 'TEAM';
+    else if (resolvedTitleLower.includes('deliverable')) inferredSectionType = 'DELIVERABLES';
+    else if (resolvedTitleLower.includes('timeline')) inferredSectionType = 'TIMELINE';
+    else if (resolvedTitleLower.includes('experience')) inferredSectionType = 'EXPERIENCE';
+    else if (resolvedTitleLower.includes('about')) inferredSectionType = 'ABOUT_FIRM';
+    else if (resolvedTitleLower.includes('conclusion')) inferredSectionType = 'CONCLUSION';
+    else if (resolvedTitleLower.includes('appendic') || resolvedTitleLower.includes('annex')) inferredSectionType = 'APPENDIX';
+
+    const section = {
+      id: draftSection?.id || planSection?.id || sectionNumberOrId,
+      sectionNumber: resolvedSectionNumber,
+      title: resolvedTitle,
+      sectionType: inferredSectionType,
+      purpose: resolvedPurpose,
+      writingGuidance: resolvedWritingGuidance,
+      torRequirementIds: planSection?.torRequirementIds || [],
+      prohibitedContent: planSection?.prohibitedContent || []
     };
 
     const sectionMappings = (plan?.requirementMappings || []).filter((m: ProposalRequirementMapping) => m.proposalSectionId === section.id);
