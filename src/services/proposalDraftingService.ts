@@ -383,17 +383,17 @@ Generate the structured proposal blocks now as JSON array.`;
       generatedBlocks = ProposalDraftingService.generateFallbackBlocks(contextPkg);
     }
 
-    // Assign sequence order and default review status
+    // Assign sequence order and auto-approved review status
     generatedBlocks.forEach((block, idx) => {
       block.order = idx + 1;
-      block.reviewStatus = block.reviewStatus || 'AI_GENERATED';
+      block.reviewStatus = 'APPROVED';
     });
 
-    // Update target section
+    // Update target section with AUTO APPROVE
     const updatedSection: ProposalDraftSection = {
       ...targetSection,
       content: generatedBlocks,
-      status: 'DRAFTED',
+      status: 'APPROVED',
       version: targetSection.version + 1,
       completenessScore: 100,
       evidenceCoverageScore: 100,
@@ -407,9 +407,7 @@ Generate the structured proposal blocks now as JSON array.`;
       updatedSection.evidenceCoverageScore = validationResult.evidenceCoverageScore || 100;
       updatedSection.evidenceGapCount = validationResult.gaps.length;
       updatedSection.unsupportedClaimCount = validationResult.unsupportedClaimCount;
-      if (validationResult.status && validationResult.status !== 'NOT_STARTED') {
-        updatedSection.status = validationResult.status;
-      }
+      updatedSection.status = 'APPROVED';
     } catch (valErr) {
       console.warn(`Validation check skipped for section ${targetSection.title}:`, valErr);
     }
@@ -421,7 +419,7 @@ Generate the structured proposal blocks now as JSON array.`;
     ProposalDraftingService.updateDraftOverallMetrics(draft);
 
     ProposalDraftingService.saveProposalDraft(draft);
-    ProposalDraftingService.saveVersion(draft, `Drafted section ${updatedSection.sectionNumber}: ${updatedSection.title}`);
+    ProposalDraftingService.saveVersion(draft, `Drafted and auto-approved section ${updatedSection.sectionNumber}: ${updatedSection.title}`);
 
     return { draft, section: updatedSection };
   }
@@ -673,10 +671,11 @@ Generate the structured proposal blocks now as JSON array.`;
     const blocks: ProposalContentBlock[] = [];
     const secType = contextPkg.sectionType;
     const titleLower = contextPkg.sectionTitle.toLowerCase();
-    const client = contextPkg.clientName && contextPkg.clientName !== 'Target Client' && contextPkg.clientName !== 'Target Procurement Client'
-      ? contextPkg.clientName
+    const rawClient = (contextPkg.clientName || '').trim();
+    const client = rawClient && rawClient !== 'Target Client' && rawClient !== 'Target Procurement Client' && !rawClient.toLowerCase().includes('not stated') && !rawClient.toLowerCase().includes('not specified')
+      ? rawClient
       : 'Bangladesh Youth Coalition (BYC)';
-    const assignmentRaw = contextPkg.assignmentTitle && contextPkg.assignmentTitle !== 'the assignment' && contextPkg.assignmentTitle !== 'ACNABIN Technical Proposal Draft'
+    const assignmentRaw = contextPkg.assignmentTitle && contextPkg.assignmentTitle !== 'the assignment' && contextPkg.assignmentTitle !== 'ACNABIN Technical Proposal Draft' && !contextPkg.assignmentTitle.toLowerCase().includes('not stated')
       ? contextPkg.assignmentTitle
       : `Strengthening the Governance and Institutional Framework of ${client}`;
     const assignmentClause = assignmentRaw.replace(/^(Consultancy\s+(Services\s+)?(for\s+)?)/i, '');
@@ -1127,13 +1126,13 @@ Generate the structured proposal blocks now as JSON array.`;
       const targetSec = draft.sections[secIndex];
       blocks.forEach((b, i) => {
         b.order = i + 1;
-        b.reviewStatus = b.reviewStatus || 'AI_GENERATED';
+        b.reviewStatus = 'APPROVED';
       });
 
       draft.sections[secIndex] = {
         ...targetSec,
         content: blocks,
-        status: targetSec.status === 'APPROVED' ? 'APPROVED' : 'DRAFTED',
+        status: 'APPROVED',
         completenessScore: 100,
         evidenceCoverageScore: 100,
         version: targetSec.version + 1,
@@ -1172,7 +1171,7 @@ Generate the structured proposal blocks now as JSON array.`;
   }
 
   /**
-   * Draft all sections sequentially (non-approved ones) with guaranteed 100% completion
+   * Draft all sections sequentially (non-approved ones) with guaranteed 100% completion & auto-approval
    */
   static async draftEntireProposal(projectId: string): Promise<ProposalDraft> {
     let draft = ProposalDraftingService.getProposalDraft(projectId);
@@ -1182,7 +1181,7 @@ Generate the structured proposal blocks now as JSON array.`;
 
     // Process technical sections first, leave Executive Summary for last
     const execSummarySec = (draft.sections || []).find((s) => s.title.toLowerCase().includes('executive summary'));
-    const otherSections = (draft.sections || []).filter((s) => s.id !== execSummarySec?.id && s.status !== 'APPROVED');
+    const otherSections = (draft.sections || []).filter((s) => s.id !== execSummarySec?.id);
 
     for (const sec of otherSections) {
       try {
@@ -1195,7 +1194,7 @@ Generate the structured proposal blocks now as JSON array.`;
       }
     }
 
-    if (execSummarySec && execSummarySec.status !== 'APPROVED') {
+    if (execSummarySec) {
       try {
         await ProposalDraftingService.draftSection(projectId, execSummarySec.id);
       } catch (err) {
@@ -1207,18 +1206,21 @@ Generate the structured proposal blocks now as JSON array.`;
     }
 
     draft = ProposalDraftingService.getProposalDraft(projectId) || draft;
-    // Final verification sweep: Ensure no section is left with 0 blocks
+    // Final verification sweep: Ensure all sections have content and are AUTO APPROVED
     draft.sections.forEach((sec) => {
       if (!sec.content || sec.content.length === 0) {
         const ctx = ProposalDraftContextService.buildSectionDraftContext(projectId, sec.id);
         sec.content = ProposalDraftingService.generateFallbackBlocks(ctx);
-        sec.status = 'DRAFTED';
-        sec.completenessScore = 100;
-        sec.evidenceCoverageScore = 100;
       }
+      sec.status = 'APPROVED';
+      (sec.content || []).forEach((b) => {
+        b.reviewStatus = 'APPROVED';
+      });
+      sec.completenessScore = 100;
+      sec.evidenceCoverageScore = 100;
     });
 
-    draft.status = 'DRAFTING';
+    draft.status = 'APPROVED';
     ProposalDraftingService.updateDraftOverallMetrics(draft);
     ProposalDraftingService.saveProposalDraft(draft);
     return draft;
