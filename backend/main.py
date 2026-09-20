@@ -48,6 +48,26 @@ app.add_middleware(
 
 processor = DocumentProcessor()
 
+@app.get("/")
+async def root():
+    """Root landing endpoint for backend API status and documentation."""
+    return {
+        "service": "ACNABIN Proposal Agent Backend API",
+        "status": "online",
+        "version": "1.0.0",
+        "docs_url": "/docs",
+        "health_check": "/health",
+        "endpoints": {
+            "health": "/health",
+            "ai_health": "/api/ai/health",
+            "chat": "/api/ai/chat",
+            "extract_requirements": "/api/ai/extract-requirements",
+            "document_inventory": "/api/documents/inventory",
+            "requirement_matrix": "/api/ai/build-requirement-matrix",
+            "convert_document": "/api/convert-document"
+        }
+    }
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint confirming service and MarkItDown engine readiness."""
