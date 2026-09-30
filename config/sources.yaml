@@ -1,0 +1,82 @@
+# Tender sources. Add a source by appending an entry; no code change needed for rss / html / worldbank_api types.
+#
+# type: rss           - any RSS/Atom feed (preferred when a site has one)
+#       worldbank_api - World Bank public procurement-notices JSON API
+#       html          - server-rendered listing page; give CSS selectors (append @attr to read an attribute)
+# enabled: false      - skipped by the runner (the reason goes in `note` and in the run report)
+# bd_only: true       - every item from this source is treated as Bangladesh
+# verified            - true only after `python -m backend.tenders.verify_sources` succeeded from a machine with open internet.
+#                       The runner ALSO checks robots.txt at runtime and skips any path it disallows.
+
+user_agent: "ProposalAgentTenderBot/1.0 (personal tender monitoring; contact via TENDERBOT_CONTACT env)"
+delay_seconds: 2
+
+sources:
+  - id: worldbank
+    name: World Bank procurement notices (Bangladesh)
+    type: worldbank_api
+    url: https://search.worldbank.org/api/v2/procnotices
+    params: {format: json, rows: 100, countrycode_exact: BD}
+    enabled: true
+    verified: false
+    note: Public JSON API, no login. Field names were written from the API docs; confirm with verify_sources.
+
+  - id: undp
+    name: UNDP procurement notices
+    type: html
+    url: https://procurement-notices.undp.org/
+    enabled: false
+    verified: false
+    bd_filter: text            # keep rows whose text mentions Bangladesh
+    item_selector: "table tr"
+    fields: {title: "a", link: "a@href", entity: "td:nth-of-type(2)", deadline: "td:nth-of-type(4)", published: "td:nth-of-type(3)"}
+    note: >
+      Public listing, no login, but I could not load the page from the build sandbox (egress blocked), so the selectors
+      are UNTESTED guesses. Run verify_sources, adjust selectors, then set enabled: true.
+
+  - id: ungm
+    name: UNGM (UN Global Marketplace) notices
+    type: html
+    url: https://www.ungm.org/Public/Notice
+    enabled: false
+    verified: false
+    note: >
+      SKIPPED. The notice search is JavaScript/POST driven with no public RSS/API I could confirm, and UNGM terms
+      are not confirmed to allow scraping. Safer: use UNGM's own saved-search e-mail alerts, or UNDP/WB feeds instead.
+
+  - id: adb
+    name: ADB procurement / consulting notices (Bangladesh)
+    type: html
+    url: https://www.adb.org/projects/tenders
+    enabled: false
+    verified: false
+    bd_filter: text
+    item_selector: "TODO"
+    fields: {title: "a", link: "a@href"}
+    note: >
+      ADB publishes notices by country; I could not confirm an RSS/API endpoint or load the page from the sandbox.
+      Fill in the selectors (or an RSS URL with type: rss) after running verify_sources.
+
+  - id: egp
+    name: Bangladesh e-GP public notices
+    type: html
+    url: https://www.eprocure.gov.bd/
+    enabled: false
+    verified: false
+    bd_only: true
+    item_selector: "TODO"
+    fields: {title: "a", link: "a@href"}
+    note: >
+      SKIPPED by default. The e-GP tender lists are behind JavaScript forms/sessions and I could not check robots.txt
+      or terms from the sandbox. Enable only if verify_sources shows a plain public listing that robots.txt allows.
+
+  - id: newspapers
+    name: Bangladeshi newspaper tender sections
+    type: rss
+    url: ""
+    enabled: false
+    verified: false
+    bd_only: true
+    note: >
+      SKIPPED. BD dailies publish tender notices mostly as scanned image ads / classified pages, and I found no
+      confirmed public feed. Add an RSS url here if you find one.

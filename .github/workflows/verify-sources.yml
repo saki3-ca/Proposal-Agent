@@ -1,0 +1,19 @@
+name: Verify tender sources
+
+# Manual. Checks robots.txt + reachability + parsing for every source in config/sources.yaml
+# (including disabled ones) from GitHub's network, and prints a report in the job log.
+on:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r backend/requirements-tenders.txt
+      - run: python -m backend.tenders.verify_sources
+        env:
+          TENDERBOT_CONTACT: ${{ vars.TENDERBOT_CONTACT }}

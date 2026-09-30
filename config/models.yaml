@@ -1,0 +1,18 @@
+# Model names live here, not in code. Keys come from env vars only (see .env.example).
+# provider: groq | cloudflare | gemini
+# Each task has a primary model and a backup that is tried if the primary call fails.
+tasks:
+  tor_extraction:
+    provider: gemini
+    model: gemini-3.6-flash
+    backup_provider: cloudflare
+    backup_model: "@cf/zai-org/glm-4.7-flash"
+    temperature: 0.0
+    max_tokens: 8192
+  tender_classification:
+    provider: groq
+    model: openai/gpt-oss-120b
+    backup_provider: gemini
+    backup_model: gemini-3.6-flash
+    temperature: 0.0
+    max_tokens: 2048

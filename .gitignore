@@ -25,3 +25,7 @@ scratch/
 Thumbs.db
 .vscode/
 .idea/
+
+# Runtime logs / generated exports
+logs/
+exports/
