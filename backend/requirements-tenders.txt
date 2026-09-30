@@ -1,0 +1,9 @@
+# Light dependency set for the scheduled tender scraper (GitHub Actions). No OCR / Gradio needed.
+httpx>=0.24.0
+python-dotenv>=1.0.0
+pyyaml>=6.0
+feedparser>=6.0.0
+beautifulsoup4>=4.12.0
+lxml>=5.0.0
+pydantic>=2.0.0
+python-docx>=1.1.0

@@ -48,7 +48,7 @@ app.add_middleware(
 
 processor = DocumentProcessor()
 
-@app.get("/")
+@app.get("/api/info")
 async def root():
     """Root landing endpoint for backend API status and documentation."""
     return {
@@ -267,7 +267,13 @@ async def analyze_reference_docx(file: UploadFile = File(...)):
 
     return result
 
+# Gradio UI (ToR Analyzer, Tenders) is served at "/" on the same port as the API.
+import gradio as gr  # noqa: E402
+from backend.ui.app import build_ui  # noqa: E402
+
+app = gr.mount_gradio_app(app, build_ui(), path="/")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000)
-

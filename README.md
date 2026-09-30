@@ -1,37 +1,48 @@
-# Proposal Agent — AI Proposal & Tender Preparation System
-
-Enterprise AI system engineered for professional services (e.g. ACNABIN Chartered Accountants) to automate end-to-end tender analysis, requirement extraction, evidence matching, and proposal generation.
-
-## 📖 Comprehensive Documentation
-For the complete architectural breakdown, AI routing matrix, ingestion pipeline, anti-hallucination protocols, and API reference, please see:
-👉 **[PROPOSAL_AGENT_GUIDE.md](file:///d:/Proposal%20Agent/PROPOSAL_AGENT_GUIDE.md)**
-
+---
+title: Proposal Agent
+emoji: 📄
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: false
 ---
 
-## ⚡ Quick Start
+# Proposal Agent — Tender & Proposal Assistant
 
-### 1. Environment Setup
-Create or update your `.env` in the root directory:
-```ini
-GEMINI_API_KEY=your_gemini_key
-GROQ_API_KEY=your_groq_key
-CLOUDFLARE_ACCOUNT_ID=your_cf_account_id
-CLOUDFLARE_API_TOKEN=your_cf_api_token
-```
+FastAPI backend with a minimal Gradio UI (served at `/`). Tabs:
 
-### 2. Run Backend & Frontend
-Run the one-click startup script:
-```cmd
-start.bat
-```
-Or start manually:
+1. **ToR Analyzer** – upload a tender/ToR → a verified "Tender Snapshot" with page numbers, an *Unmapped – review* list, XLSX/DOCX downloads.
+2. **Tenders** – tenders found by the daily Tender Finder bot (stored in Supabase), with filters and an *Analyze ToR* action.
+3. *Proposal Generator* – not built yet (waiting for Features 1–2 to be confirmed).
+
+## Run locally
 ```bash
-# Terminal 1: Backend
-python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
+cp .env.example .env            # fill in keys
+pip install -r backend/requirements.txt
+uvicorn backend.main:app --port 7860      # UI at http://localhost:7860/ , API docs at /docs
+```
+Optional for scanned Bangla: install Tesseract with the `ben` language pack.
 
-# Terminal 2: Frontend
-npm run dev
+## Tests / accuracy check
+```bash
+pytest backend/test_tor_accuracy.py backend/test_tenders.py
+python scripts/eval_tor.py            # needs an LLM key; prints extracted / dropped-quote / unmapped counts per sample ToR
+python scripts/eval_tor.py --no-llm   # ingestion + coverage only
 ```
 
-- **Frontend Application**: [http://localhost:5173](http://localhost:5173)
-- **Backend API Docs (Swagger)**: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+## Tender Finder bot
+```bash
+python -m backend.tenders.verify_sources   # which sources are reachable / parse (run from an open network)
+python -m backend.tenders.run --dry-run    # fetch + classify, no DB, no digest
+python -m backend.tenders.run              # full run (what the GitHub Action does daily)
+```
+Sources live in `config/sources.yaml`; model names in `config/models.yaml`.
+Supabase schema: `supabase/migrations/20260930_tenders.sql`.
+
+## Deploy
+* **Hugging Face Space** (Docker SDK, port 7860): `.github/workflows/deploy-space.yml` pushes on every push to `main`.
+  Needs GitHub secret `HF_TOKEN`, variable `HF_SPACE` (`user/space-name`); add the API keys + `SUPABASE_*` as **Space secrets**.
+* **Daily scraper**: `.github/workflows/tenders-daily.yml` (cron) – needs the secrets listed in the file.
+
+See `PROPOSAL_AGENT_GUIDE.md` for the original architecture notes (its React frontend sections are obsolete).
