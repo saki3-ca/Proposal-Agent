@@ -1,10 +1,30 @@
-import { defineConfig } from 'vite';
+import { defineConfig, Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
+import fs from 'fs';
+
+function copyTestDataPlugin(): Plugin {
+  return {
+    name: 'copy-test-data',
+    closeBundle() {
+      const srcDir = path.resolve(__dirname, 'test_data');
+      const destDir = path.resolve(__dirname, 'dist', 'test_data');
+      if (fs.existsSync(srcDir)) {
+        try {
+          console.log('[copy-test-data] Copying test_data to dist/test_data...');
+          fs.cpSync(srcDir, destDir, { recursive: true });
+          console.log('[copy-test-data] ✓ Successfully copied test_data to dist/test_data');
+        } catch (err) {
+          console.error('[copy-test-data] Error copying test_data:', err);
+        }
+      }
+    },
+  };
+}
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), copyTestDataPlugin()],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

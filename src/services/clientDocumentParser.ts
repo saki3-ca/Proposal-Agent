@@ -61,6 +61,10 @@ export class ClientDocumentParser {
       return await this.extractPdfText(file);
     } else if (fileName.endsWith('.docx') || fileName.endsWith('.doc')) {
       return await this.extractDocxText(file);
+    } else if (fileName.endsWith('.pptx')) {
+      return await this.extractPptxText(file);
+    } else if (fileName.endsWith('.xlsx')) {
+      return await this.extractXlsxText(file);
     } else if (
       fileName.endsWith('.txt') ||
       fileName.endsWith('.md') ||
@@ -88,6 +92,131 @@ export class ClientDocumentParser {
 
       throw new Error(`Unsupported binary format for direct browser extraction: ${file.name}`);
     }
+  }
+
+  /**
+   * Extracts text and slides from PowerPoint (.pptx) using JSZip and XML parsing
+   */
+  static async extractPptxText(file: File): Promise<ClientExtractionResult> {
+    const arrayBuffer = await file.arrayBuffer();
+    const zip = await JSZip.loadAsync(arrayBuffer);
+    const parser = new DOMParser();
+    const slides: string[] = [];
+
+    // Find all slide XML files
+    const slideFileNames = Object.keys(zip.files)
+      .filter((name) => /^ppt\/slides\/slide\d+\.xml$/i.test(name))
+      .sort((a, b) => {
+        const numA = parseInt(a.replace(/\D/g, ''), 10);
+        const numB = parseInt(b.replace(/\D/g, ''), 10);
+        return numA - numB;
+      });
+
+    for (let idx = 0; idx < slideFileNames.length; idx++) {
+      const slideFile = zip.file(slideFileNames[idx]);
+      if (!slideFile) continue;
+
+      const slideXml = await slideFile.async('text');
+      const xmlDoc = parser.parseFromString(slideXml, 'application/xml');
+      const textNodes = xmlDoc.getElementsByTagName('a:t');
+      const slideTexts: string[] = [];
+
+      for (let j = 0; j < textNodes.length; j++) {
+        const txt = textNodes[j].textContent?.trim();
+        if (txt) slideTexts.push(txt);
+      }
+
+      if (slideTexts.length > 0) {
+        slides.push(`## Slide ${idx + 1}\n\n${slideTexts.join('\n\n')}`);
+      }
+    }
+
+    const fullMarkdown = slides.length > 0 ? slides.join('\n\n---\n\n') : `# ${file.name}\n*(No text extracted from slides)*`;
+    return {
+      markdown: fullMarkdown,
+      pageCount: Math.max(1, slideFileNames.length),
+      wordCount: fullMarkdown.split(/\s+/).filter(Boolean).length,
+      charCount: fullMarkdown.length,
+      source: 'client_docx'
+    };
+  }
+
+  /**
+   * Extracts sheet text from Excel (.xlsx) using JSZip and SharedStrings XML
+   */
+  static async extractXlsxText(file: File): Promise<ClientExtractionResult> {
+    const arrayBuffer = await file.arrayBuffer();
+    const zip = await JSZip.loadAsync(arrayBuffer);
+    const parser = new DOMParser();
+
+    // 1. Read shared strings
+    const sharedStrings: string[] = [];
+    const sharedStringsFile = zip.file('xl/sharedStrings.xml');
+    if (sharedStringsFile) {
+      const ssXml = await sharedStringsFile.async('text');
+      const ssDoc = parser.parseFromString(ssXml, 'application/xml');
+      const tNodes = ssDoc.getElementsByTagName('t');
+      for (let i = 0; i < tNodes.length; i++) {
+        sharedStrings.push(tNodes[i].textContent || '');
+      }
+    }
+
+    // 2. Read sheets
+    const sheetFiles = Object.keys(zip.files)
+      .filter((name) => /^xl\/worksheets\/sheet\d+\.xml$/i.test(name))
+      .sort();
+
+    const mdSheets: string[] = [];
+
+    for (let sIdx = 0; sIdx < sheetFiles.length; sIdx++) {
+      const sheetFile = zip.file(sheetFiles[sIdx]);
+      if (!sheetFile) continue;
+
+      const sheetXml = await sheetFile.async('text');
+      const sheetDoc = parser.parseFromString(sheetXml, 'application/xml');
+      const rowNodes = sheetDoc.getElementsByTagName('row');
+      const tableRows: string[] = [];
+
+      for (let r = 0; r < Math.min(rowNodes.length, 200); r++) {
+        const row = rowNodes[r];
+        const cellNodes = row.getElementsByTagName('c');
+        const cellValues: string[] = [];
+
+        for (let c = 0; c < cellNodes.length; c++) {
+          const cell = cellNodes[c];
+          const cellType = cell.getAttribute('t');
+          const vNode = cell.getElementsByTagName('v')[0];
+          let val = vNode?.textContent || '';
+
+          if (cellType === 's') {
+            const idx = parseInt(val, 10);
+            val = !isNaN(idx) && sharedStrings[idx] ? sharedStrings[idx] : val;
+          }
+          cellValues.push(val.trim().replace(/\|/g, '\\|') || ' ');
+        }
+
+        if (cellValues.length > 0) {
+          tableRows.push(`| ${cellValues.join(' | ')} |`);
+          if (r === 0) {
+            const sep = Array(cellValues.length).fill('---').join(' | ');
+            tableRows.push(`| ${sep} |`);
+          }
+        }
+      }
+
+      if (tableRows.length > 0) {
+        mdSheets.push(`## Sheet ${sIdx + 1}\n\n${tableRows.join('\n')}`);
+      }
+    }
+
+    const fullMarkdown = mdSheets.length > 0 ? mdSheets.join('\n\n---\n\n') : `# ${file.name}\n*(Empty spreadsheet)*`;
+    return {
+      markdown: fullMarkdown,
+      pageCount: Math.max(1, sheetFiles.length),
+      wordCount: fullMarkdown.split(/\s+/).filter(Boolean).length,
+      charCount: fullMarkdown.length,
+      source: 'client_docx'
+    };
   }
 
   /**

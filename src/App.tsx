@@ -6,6 +6,7 @@ import { ProjectsPage } from './pages/ProjectsPage';
 import { ProjectWorkspace } from './components/projects/ProjectWorkspace';
 import { DocumentLibraryPage } from './pages/DocumentLibraryPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { QuickTorAnalyzerPage } from './pages/QuickTorAnalyzerPage';
 import { ScratchWorkspaceModal } from './components/workspace/ScratchWorkspaceModal';
 import { ProposalProgressModal } from './components/workspace/ProposalProgressModal';
 import { INITIAL_PROJECTS, ATTENTION_ITEMS, DEMO_USER } from './services/mockData';
@@ -144,6 +145,19 @@ export function App() {
         )}
 
         {currentPath === '/document-library' && <DocumentLibraryPage />}
+
+        {currentPath === '/quick-tor-analyzer' && (
+          <QuickTorAnalyzerPage
+            onNavigate={handleNavigate}
+            onConvertToProject={(newProj) => {
+              handleAddProject(newProj);
+              setProgressModalProject(newProj);
+            }}
+            onOpenExistingProject={(projId) => {
+              handleSelectProject(projId);
+            }}
+          />
+        )}
 
         {currentPath === '/settings' && <SettingsPage />}
       </AppLayout>

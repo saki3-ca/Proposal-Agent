@@ -69,14 +69,52 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({ document: doc, o
     URL.revokeObjectURL(url);
   };
 
-  const handleDownloadOriginal = () => {
-    if (activeFileUrl) {
+  const handleDownloadOriginal = async () => {
+    // 1. If it's a blob: or data: URL (e.g. locally uploaded file)
+    if (activeFileUrl && (activeFileUrl.startsWith('blob:') || activeFileUrl.startsWith('data:'))) {
       const link = document.createElement('a');
       link.href = activeFileUrl;
       link.download = doc.fileName;
+      document.body.appendChild(link);
       link.click();
-    } else if (doc.markdownContent) {
+      document.body.removeChild(link);
+      return;
+    }
+
+    // 2. If it's a server URL (like /test_data/...)
+    if (activeFileUrl) {
+      try {
+        const cleanUrl = encodeURI(activeFileUrl);
+        const res = await fetch(cleanUrl);
+        if (!res.ok) {
+          throw new Error(`Server returned ${res.status}`);
+        }
+        const contentType = res.headers.get('content-type') || '';
+        // If server returned HTML (SPA fallback), the static file was not found
+        if (contentType.includes('text/html') && !doc.fileName.toLowerCase().endsWith('.html')) {
+          throw new Error('Static file not found on server (received HTML fallback)');
+        }
+
+        const blob = await res.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = doc.fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(blobUrl);
+        return;
+      } catch (err) {
+        console.warn('Original binary file fetch failed, falling back to extracted markdown:', err);
+      }
+    }
+
+    // 3. Fallback: If original binary file is unavailable, download the extracted markdown document
+    if (doc.markdownContent) {
       handleDownloadMarkdown();
+    } else {
+      alert(`Unable to download ${doc.fileName}. The file is not available on this server.`);
     }
   };
 
@@ -199,7 +237,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({ document: doc, o
                 </div>
                 {activeFileUrl && (
                   <a
-                    href={activeFileUrl}
+                    href={encodeURI(activeFileUrl)}
                     target="_blank"
                     rel="noreferrer"
                     className="text-[#1B2A6B] hover:underline font-bold flex items-center space-x-1"
@@ -212,7 +250,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({ document: doc, o
 
               {activeFileUrl ? (
                 <iframe
-                  src={activeFileUrl}
+                  src={encodeURI(activeFileUrl)}
                   title={doc.fileName}
                   className="w-full h-[720px] rounded-lg border border-slate-300 shadow-inner bg-slate-100"
                 />

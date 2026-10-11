@@ -5,7 +5,8 @@ import {
   FolderKanban,
   Settings,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Zap
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -36,6 +37,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       title: 'WORK',
       items: [
         { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+        { path: '/quick-tor-analyzer', label: 'Quick Analyze & MD', icon: Zap, badge: 'MD' },
         {
           path: '/projects',
           label: 'Active Projects',

@@ -297,6 +297,20 @@ export const ScratchWorkspaceModal: React.FC<ScratchWorkspaceModalProps> = ({
     setTimeout(() => setSavedBanner(false), 3000);
   };
 
+  const handleDownloadSourceMarkdown = () => {
+    if (!analysisResult?.normalization.normalizedMarkdown) return;
+    const cleanFileName = `${(analysisResult.fileName || 'document.pdf').replace(/\.[^/.]+$/, '')}.md`;
+    const blob = new Blob([analysisResult.normalization.normalizedMarkdown], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.href = url;
+    downloadAnchor.download = cleanFileName;
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+    URL.revokeObjectURL(url);
+  };
+
   const handleExportMarkdownReport = () => {
     if (!analysisResult) return;
     const { overview, keyRequirements, requirements, fileName, validationStatus } = analysisResult;
@@ -1113,11 +1127,20 @@ ${requirements.map((r, i) => `| ${i + 1} | ${r.category || 'Technical'} | ${r.so
                       </button>
 
                       <button
+                        onClick={handleDownloadSourceMarkdown}
+                        className="px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-900 text-xs font-bold rounded border border-teal-300 transition-colors flex items-center space-x-1"
+                        title="Download converted source document Markdown (.md)"
+                      >
+                        <Download className="w-3.5 h-3.5 text-teal-700" />
+                        <span>Download .md</span>
+                      </button>
+
+                      <button
                         onClick={handleExportMarkdownReport}
                         className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-800 text-xs font-bold rounded border border-slate-300 transition-colors flex items-center space-x-1"
                         title="Download human-readable analysis report in Markdown format"
                       >
-                        <Download className="w-3.5 h-3.5 text-slate-600" />
+                        <FileCheck2 className="w-3.5 h-3.5 text-slate-600" />
                         <span>Export Report (.md)</span>
                       </button>
 

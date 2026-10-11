@@ -2,9 +2,10 @@
   "framework": "vite",
   "buildCommand": "vite build",
   "outputDirectory": "dist",
+  "cleanUrls": true,
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/((?!test_data|assets).*)",
       "destination": "/index.html"
     }
   ]

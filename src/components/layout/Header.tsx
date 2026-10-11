@@ -31,6 +31,7 @@ export const Header: React.FC<HeaderProps> = ({
       if (activeProjectName) crumbs.push({ label: activeProjectName, path: currentPath });
       return crumbs;
     }
+    if (currentPath.startsWith('/quick-tor-analyzer')) return [{ label: 'Quick Analyze TOR & MD', path: '/quick-tor-analyzer' }];
     if (currentPath.startsWith('/document-library')) return [{ label: 'Document Library', path: '/document-library' }];
     if (currentPath.startsWith('/settings')) return [{ label: 'Settings', path: '/settings' }];
     return [{ label: 'Home', path: '/' }];

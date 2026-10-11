@@ -140,38 +140,66 @@ export class AiService {
       fallback_provider?: 'groq' | 'cloudflare' | 'gemini';
     }
   ): Promise<string> {
-    const response = await fetch(`${FASTAPI_BASE_URL}/api/ai/chat`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        provider,
-        model: options?.model,
-        messages,
-        temperature: options?.temperature ?? 0.1,
-        max_tokens: options?.max_tokens ?? 1024,
-        fallback: options?.fallback ?? false,
-        fallback_provider: options?.fallback_provider
-      })
-    });
+    try {
+      const response = await fetch(`${FASTAPI_BASE_URL}/api/ai/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          provider,
+          model: options?.model,
+          messages,
+          temperature: options?.temperature ?? 0.1,
+          max_tokens: options?.max_tokens ?? 1024,
+          fallback: options?.fallback ?? false,
+          fallback_provider: options?.fallback_provider
+        })
+      });
 
-    if (!response.ok) {
-      let errDetail = `HTTP ${response.status} ${response.statusText}`;
-      try {
-        const errJson = await response.json();
-        if (errJson?.error) {
-          errDetail = errJson.error;
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.content) {
+          return data.content;
         }
-      } catch {}
-      throw new Error(`AI Backend Error (${response.status}): ${errDetail}`);
+      }
+    } catch (e) {
+      console.log('[AiService] Backend unreachable, falling back to direct client Cloudflare AI router...');
     }
 
-    const data = await response.json();
-    if (!data.success) {
-      throw new Error(data.error || 'AI Backend call unsuccessful.');
+    // Direct Cloudflare Workers AI execution (when running 100% serverless on Cloudflare Pages)
+    const cfAccountId = (import.meta as any).env?.VITE_CLOUDFLARE_ACCOUNT_ID;
+    const cfApiToken = (import.meta as any).env?.VITE_CLOUDFLARE_API_TOKEN;
+    if (cfAccountId && cfApiToken) {
+      try {
+        const cfModel = options?.model || '@cf/meta/llama-3.3-70b-instruct';
+        const cfRes = await fetch(
+          `https://api.cloudflare.com/client/v4/accounts/${cfAccountId}/ai/run/${cfModel}`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${cfApiToken}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              messages,
+              max_tokens: options?.max_tokens || 1024,
+              temperature: options?.temperature || 0.1
+            })
+          }
+        );
+        if (cfRes.ok) {
+          const cfData = await cfRes.json();
+          if (cfData.result?.response) {
+            return cfData.result.response;
+          }
+        }
+      } catch (cfErr) {
+        console.warn('[AiService] Direct Cloudflare Workers AI call failed:', cfErr);
+      }
     }
-    return data.content || '';
+
+    throw new Error('AI Provider unavailable. Set Cloudflare Workers AI credentials or start the backend.');
   }
 
   /**
